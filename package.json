@@ -1,0 +1,32 @@
+{
+  "name": "glint-js-kit",
+  "version": "0.1.0",
+  "description": "Library for easier development with Glint.js. It is supposed to be added as a dependency in devDependencies key in package.json.",
+  "main": "index.js",
+  "type": "module",
+  "dependencies": {
+    "eslint": "8.20.0",
+    "eslint-config-google": "^0.14.0",
+    "jest": "^28.1.1",
+    "nodemon": "^2.0.19"
+  },
+  "scripts": {
+    "test": "jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MacHonzee/glint-js-kit.git"
+  },
+  "keywords": [
+    "glintjs",
+    "jest",
+    "developmentKit",
+    "eslint"
+  ],
+  "author": "Jan Rudolf",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/MacHonzee/glint-js-kit/issues"
+  },
+  "homepage": "https://github.com/MacHonzee/glint-js-kit#readme"
+}
