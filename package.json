@@ -8,10 +8,14 @@
     "eslint": "^8.23.0",
     "eslint-config-google": "^0.14.0",
     "jest": "^28.1.1",
-    "nodemon": "^2.0.19"
+    "nodemon": "^2.0.19",
+    "yargs": "^17.5.1"
   },
   "scripts": {
     "test": "jest"
+  },
+  "bin": {
+    "glint": "./src/scripts/glint-cli.js"
   },
   "repository": {
     "type": "git",
