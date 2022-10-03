@@ -5,7 +5,7 @@ import {spawn} from 'node:child_process';
 
 function spawnCmd(cmd, opts) {
   const spawnedProcess = spawn(
-      'nodemon',
+      cmd,
       [],
       {shell: true, ...opts},
   );
