@@ -9,8 +9,9 @@ async function main() {
 
   switch (scriptName) {
     case 'start':
-      process.chdir('C:\\Projekty\\energy-kit-workspace\\energy-kit\\energy-kit-server');
-      await start();
+      return await start();
+    default:
+      return console.error(`Unrecognized command '${scriptName}'.`);
   }
 }
 
