@@ -27,7 +27,8 @@ async function start() {
     spawnCmd('npm start', {name: 'client', cwd: path.resolve(clientPath)});
   }
 
-  spawnCmd('nodemon', {name: 'server', cwd, env: {NODE_ENV: 'dev'}});
+  const nodeEnv = process.env.NODE_ENV || 'local';
+  spawnCmd('nodemon', {name: 'server', cwd, env: {NODE_ENV: nodeEnv}});
 }
 
 export default start;
