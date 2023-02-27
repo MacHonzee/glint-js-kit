@@ -4,6 +4,7 @@
 name: Node.js Package
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - version/**
@@ -17,8 +18,8 @@ jobs:
         with:
           node-version: 16
       - run: npm ci
-      - run: npm scan
-      - run: npm analyze
+      - run: npm run scan
+      - run: npm run analyze
       - run: npm test
 
   publish-npm:
