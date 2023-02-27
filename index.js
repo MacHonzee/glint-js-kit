@@ -1,5 +1,3 @@
-import dummyScript from './src/scripts/dummy-script.js';
+import start from "./src/scripts/start.js";
 
-export {
-  dummyScript,
-};
+export { start };
