@@ -1,6 +1,6 @@
 {
   "name": "glint-js-kit",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Library for easier development with Glint.js. It is supposed to be added as a dependency in devDependencies key in package.json.",
   "main": "index.js",
   "type": "module",
@@ -10,7 +10,7 @@
     "eslint-config-prettier": "^8.6.0",
     "prettier": "^2.8.3",
     "jest": "^28.1.1",
-    "nodemon": "^2.0.19",
+    "nodemon": "^3.0.1",
     "yargs": "^17.5.1"
   },
   "bin": {
