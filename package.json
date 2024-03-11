@@ -6,11 +6,12 @@
   "type": "module",
   "dependencies": {
     "eslint": "^8.23.0",
-    "eslint-plugin-prettier": "^4.2.1",
     "eslint-config-prettier": "^8.6.0",
-    "prettier": "^2.8.3",
+    "eslint-plugin-prettier": "^4.2.1",
+    "glint-js": "^0.6.9",
     "jest": "^28.1.1",
     "nodemon": "^3.0.1",
+    "prettier": "^2.8.3",
     "yargs": "^17.5.1"
   },
   "bin": {
