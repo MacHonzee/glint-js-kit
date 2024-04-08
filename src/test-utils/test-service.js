@@ -174,12 +174,13 @@ class TestService {
    * @param {string} useCase
    * @param {object} [data = {}]
    * @param {Function | Promise<string> | object?} user
+   * @param {string[]} [authorizedRoles = []]
    * @returns {Promise<UseCaseEnvironment>}
    */
-  async getUcEnv(useCase, data = {}, user) {
+  async getUcEnv(useCase, data = {}, user, authorizedRoles = []) {
     // cannot be at top-level imports
     const { jest } = await import("@jest/globals");
-    const { UseCaseEnvironment, Session } = await import("glint-js");
+    const { UseCaseEnvironment, Session, AuthorizationResult, RouteRegister } = await import("glint-js");
 
     const mockRequest = {
       protocol: "http",
@@ -205,6 +206,14 @@ class TestService {
       const userData = typeof user === "function" ? await user() : await user;
       ucEnv.session = new Session(userData);
     }
+
+    ucEnv.authorizationResult = new AuthorizationResult({
+      authorized: true,
+      username: ucEnv.session?.user?.email,
+      useCaseRoles: RouteRegister.getRoute(useCase)?.roles || [],
+      userRoles: authorizedRoles,
+      useCase,
+    });
 
     return ucEnv;
   }
