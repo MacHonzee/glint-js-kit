@@ -20,10 +20,7 @@ class AssertionService {
     let response;
     try {
       response = await call();
-      console.log("=>(assertion-service.js:23) response", response);
     } catch (e) {
-      console.log("=>(assertion-service.js:24) e", e);
-
       assertThrow(e.response, e);
       return;
     }

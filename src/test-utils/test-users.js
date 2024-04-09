@@ -1,5 +1,5 @@
 import TestService from "./test-service.js";
-import { AuthenticationService } from "glint-js";
+import { AuthenticationService, DuplicateKeyError } from "glint-js";
 
 const PERMISSION_SECRET = "testPermissionKey";
 
@@ -41,10 +41,15 @@ class AbstractTestUsers {
    * @returns {Promise<TestUser>}
    */
   async registerRole(role, permissions) {
-    if (this._cache[role]) return this._cache[role];
-    const user = await this._registerTestUser(role);
-    await this.grantPermissions(role, permissions, role === "admin");
-    return user;
+    if (this._cache[role]) return await this._cache[role];
+
+    this._cache[role] = async () => {
+      const user = await this._registerTestUser(role);
+      await this.grantPermissions(role, permissions, role === "admin");
+      return user;
+    };
+
+    return await this._cache[role]();
   }
 
   /**
@@ -68,7 +73,13 @@ class AbstractTestUsers {
     for (const role of roles) {
       ucEnv.dtoIn.role = role;
       const routeMethod = useCase.replace("permission/", "");
-      await PermissionRoute[routeMethod](ucEnv);
+      try {
+        await PermissionRoute[routeMethod](ucEnv);
+      } catch (e) {
+        if (!(e instanceof DuplicateKeyError)) {
+          throw e;
+        }
+      }
     }
   }
 
@@ -83,7 +94,21 @@ class AbstractTestUsers {
     await AuthenticationService.init();
 
     const ucEnv = await TestService.getUcEnv("user/register", userData);
-    return await UserRoute.register(ucEnv);
+
+    try {
+      return await UserRoute.register(ucEnv);
+    } catch (e) {
+      if (e instanceof UserRoute.ERRORS.RegistrationFailed && e.message.includes("already exists")) {
+        const loginDtoIn = {
+          username: userData.username,
+          password: userData.password,
+        };
+        const loginUcEnv = await TestService.getUcEnv("user/login", loginDtoIn);
+        return await UserRoute.login(loginUcEnv);
+      } else {
+        throw e;
+      }
+    }
   }
 
   /**

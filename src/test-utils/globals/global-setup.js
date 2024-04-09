@@ -20,6 +20,9 @@ async function main() {
 
   // to make sure that it loads properly
   await import("glint-js");
+
+  const SysRoute = (await import("glint-js/src/routes/sys-route.js")).default;
+  await SysRoute.syncIndexes();
 }
 
 export default main;
