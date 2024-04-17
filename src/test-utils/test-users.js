@@ -43,13 +43,13 @@ class AbstractTestUsers {
   async registerRole(role, permissions) {
     if (this._cache[role]) return await this._cache[role];
 
-    this._cache[role] = async () => {
+    this._cache[role] = (async () => {
       const user = await this._registerTestUser(role);
       await this.grantPermissions(role, permissions, role === "admin");
       return user;
-    };
+    })();
 
-    return await this._cache[role]();
+    return await this._cache[role];
   }
 
   /**
@@ -98,7 +98,10 @@ class AbstractTestUsers {
     try {
       return await UserRoute.register(ucEnv);
     } catch (e) {
-      if (e instanceof UserRoute.ERRORS.RegistrationFailed && e.message.includes("already exists")) {
+      if (
+        e instanceof UserRoute.ERRORS.RegistrationFailed &&
+        (e.params.name === "UserExistsError" || e.params.cause === "A duplicate key error occurred in a database.")
+      ) {
         const loginDtoIn = {
           username: userData.username,
           password: userData.password,
@@ -148,8 +151,7 @@ class AbstractTestUsers {
       language: "en",
     };
 
-    this._cache[user] = await this.registerUser(userData);
-    return this._cache[user];
+    return await this.registerUser(userData);
   }
 
   /**
