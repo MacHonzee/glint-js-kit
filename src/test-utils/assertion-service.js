@@ -45,9 +45,11 @@ class AssertionService {
   /**
    * Checks that the object contains standard MongoDB attributes
    *
-   * @param {object} dataObject
+   * @param {object} dataObject - object to check
+   * @param {object} options - additional options
+   * @param {boolean} options.skipTimestamps - whether to skip checking timestamps
    */
-  assertBaseData(dataObject) {
+  assertBaseData(dataObject, options = {}) {
     expect(dataObject).toBeDefined();
 
     // check version
@@ -62,8 +64,10 @@ class AssertionService {
     }
 
     // check timestamps
-    expect(dataObject.createdAt).toBeInstanceOf(Date);
-    expect(dataObject.updatedAt).toBeInstanceOf(Date);
+    if (!options.skipTimestamps) {
+      expect(dataObject.createdAt).toBeInstanceOf(Date);
+      expect(dataObject.updatedAt).toBeInstanceOf(Date);
+    }
   }
 
   /**
