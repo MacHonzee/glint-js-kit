@@ -60,7 +60,7 @@ class AssertionService {
     if (typeof dataObject._id === "string") {
       expect(dataObject._id).toMatch(/^[a-f0-9]{24}$/);
     } else {
-      expect(dataObject._id).toBeInstanceOf(mongoose.Types.ObjectId);
+      expect(dataObject._id.constructor.name).toBe(mongoose.Types.ObjectId.constructor.name);
     }
 
     // check timestamps
