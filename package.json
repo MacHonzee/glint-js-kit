@@ -1,6 +1,6 @@
 {
   "name": "glint-js-kit",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "description": "Library for easier development with Glint.js. It is supposed to be added as a dependency in devDependencies key in package.json.",
   "main": "index.js",
   "type": "module",
@@ -14,7 +14,7 @@
     "express": "^4.18.3",
     "express-async-errors": "^3.1.1",
     "jest": "^28.1.1",
-    "mongodb-memory-server-core": "^8.16.0",
+    "mongodb-memory-server-core": "^10.1.3",
     "mongoose": "^8.2.1",
     "nodemon": "^3.0.1",
     "prettier": "^2.8.3",
