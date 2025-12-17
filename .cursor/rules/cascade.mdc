@@ -1,0 +1,190 @@
+# Cascade Module Documentation
+
+## Overview
+
+Cascade is a declarative endpoint execution module that allows chaining API calls with state management, environment configs, authentication, and error handling. It enables automation of complex workflows by declaring endpoints, methods, and data transformations in a structured format.
+
+## Key Concepts
+
+### Environment Configuration
+
+Each project using Cascade needs an environment configuration file (e.g., `cascade.env.js`) that defines:
+- **Services**: Microservices with their base URIs and optional default auth
+- **Authentication**: Login endpoints, token/user extraction paths, and user credentials
+- **Config**: Timeout, retry settings, etc.
+
+### Datasets
+
+Datasets are JavaScript files that export a default function returning an object with a `cascade` array. Each command in the cascade can:
+- Call API endpoints
+- Import other datasets (with parameters)
+- Save responses to state
+- Handle errors gracefully
+
+### State Management
+
+State is passed through execution and contains:
+- `users`: Authenticated user objects
+- `params`: Parameters from imports
+- `saved`: Explicitly saved response data (via `saveAs`)
+
+## Usage
+
+### CLI Command
+
+```bash
+glint cascade --dataset ./datasets/my-flow.js --env ./cascade.env.js
+```
+
+Options:
+- `--dataset, -d`: Path to dataset file or directory (required)
+- `--env, -e`: Path to environment config (required)
+- `--option, -o`: Pass options as key=value (repeatable)
+- `--log-level, -l`: Log level (error, info, debug)
+- `--dry-run`: Print commands without executing
+
+### Programmatic API
+
+```javascript
+import { execute, loadEnvironment } from "glint-js-kit/cascade";
+
+const env = await loadEnvironment("./cascade.env.js");
+const state = await execute("./datasets/my-flow.js", env, {
+  logLevel: "info",
+  options: { email: "test@example.com" }
+});
+```
+
+## Environment Configuration Format
+
+```javascript
+export default {
+  name: "development",
+  services: {
+    main: {
+      baseUri: "http://localhost:3000",
+      defaultAuth: "mainUser1"  // Optional service-level default auth
+    }
+  },
+  authentication: {
+    service: "main",               // Default service for auth
+    loginEndpoint: "/user/login",
+    tokenPath: "token",            // Dot-notation path to extract token
+    userPath: "user",              // Dot-notation path to extract user
+    defaultAuth: "mainUser1",      // Global default auth (lowest priority)
+    users: {
+      mainUser1: {
+        usernameEnvKey: "MAIN_USER1_USERNAME",
+        passwordEnvKey: "MAIN_USER1_PASSWORD"
+      }
+    }
+  },
+  config: {
+    timeout: 30000
+  }
+};
+```
+
+## Dataset Format
+
+```javascript
+export default async function(env, state, options = {}) {
+  return {
+    cascade: [
+      {
+        endpoint: "/user/create",
+        service: "main",
+        method: "POST",
+        dtoIn: { email: options.email },
+        saveAs: "newUser"
+      },
+      {
+        import: "./common/send-email.js",
+        params: {
+          subject: "Welcome!",
+          body: (state) => `Hello ${state.saved.newUser.name}!`
+        }
+      }
+    ]
+  };
+}
+```
+
+## Command Schema
+
+| Property | Type | Required | Description |
+|---------|------|----------|-------------|
+| `endpoint` | string | Yes* | API endpoint path |
+| `service` | string | Yes* | Service name from env config |
+| `auth` | string | No | User key (overrides defaultAuth) |
+| `method` | string | No | HTTP method (default: POST) |
+| `dtoIn` | object/function | No | Request body or function `(state) => object` |
+| `saveAs` | string | No | Key to save response.data under in state |
+| `allowedErrorCodes` | string[] | No | Array of error codes to allow |
+| `allowedError` | function | No | Custom `(error, response) => boolean` |
+| `import` | string | Yes* | Relative path to dataset file or directory |
+| `params` | object | No | Parameters passed to imported dataset |
+
+*Either `endpoint`+`service` OR `import` is required.
+
+## Authentication Priority
+
+1. Command-level `auth` field (highest priority)
+2. Service-level `defaultAuth` in env config
+3. Global `defaultAuth` in authentication config (lowest priority)
+
+## Import Parameters
+
+When importing datasets, use the `params` property to pass data:
+
+```javascript
+{
+  import: "./common/email.js",
+  params: {
+    subject: "Hello",
+    body: (state) => `User ID: ${state.saved.userId}`
+  }
+}
+```
+
+Imported datasets access params via `state.params`.
+
+## Directory Support
+
+Both dataset paths and imports can point to directories. All `.js` files in the directory are loaded and executed alphabetically.
+
+## Error Handling
+
+By default, any 4xx/5xx response stops execution. To allow specific errors:
+
+```javascript
+{
+  endpoint: "/user/activate",
+  service: "main",
+  allowedErrorCodes: ["alreadyActive", "userNotFound"],
+  allowedError: (error, response) => {
+    return response?.data?.code === "verificationPending";
+  }
+}
+```
+
+## Logging
+
+Cascade uses Winston for logging. Levels:
+- `error`: Only errors
+- `info`: Progress updates (default)
+- `debug`: Detailed request/response info
+
+## Best Practices
+
+1. Keep datasets focused and reusable
+2. Use imports for common workflows
+3. Store credentials in `.env` files (gitignored)
+4. Use `saveAs` sparingly - only save what's needed
+5. Leverage function-based `dtoIn` for dynamic data
+6. Use service-level `defaultAuth` for service-specific defaults
+
+## Future Features
+
+- Jest integration with declarative assertions
+- Test mode for validation without side effects
