@@ -20,7 +20,7 @@
     "jest": "^29.7.0"
   },
   "bin": {
-    "glint": "./src/scripts/glint-cli.js"
+    "glint": "src/scripts/glint-cli.js"
   },
   "scripts": {
     "scan": "npm audit",
@@ -35,13 +35,19 @@
       "^(\\.{1,2}/.*)\\.js$": "$1"
     },
     "transform": {},
-    "testMatch": ["**/test/**/*.test.js"],
+    "testMatch": [
+      "**/test/**/*.test.js"
+    ],
     "collectCoverage": true,
     "collectCoverageFrom": [
       "src/cascade/**/*.js",
       "!src/cascade/types.js"
     ],
-    "coverageReporters": ["text", "lcov", "html"]
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "html"
+    ]
   },
   "repository": {
     "type": "git",
