@@ -1,6 +1,6 @@
 {
   "name": "glint-js-kit",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Library for easier development with Glint.js. It is supposed to be added as a dependency in devDependencies key in package.json.",
   "main": "index.js",
   "type": "module",
