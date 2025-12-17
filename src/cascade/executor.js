@@ -73,7 +73,7 @@ async function processCommand(command, env, state, options, currentDatasetPath) 
  * @param {import('./types.js').ExecutionOptions} options - Execution options
  * @returns {Promise<import('./types.js').State>} Final execution state
  */
-export async function execute(datasetPath, env, options = {}) {
+export async function execute(datasetPath, env, options) {
   const logger = getLogger();
 
   logger.info(`Starting execution of dataset: ${datasetPath}`);

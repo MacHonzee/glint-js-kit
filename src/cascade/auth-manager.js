@@ -45,7 +45,7 @@ export async function authenticate(userKey, env, state) {
     throw new Error(`Service '${serviceName}' not found in environment configuration`);
   }
 
-  const loginEndpoint = authConfig.loginEndpoint;
+  const loginEndpoint = authConfig.loginEndpoint || "/user/login";
 
   // Get credentials from env vars
   const username = process.env[userConfig.usernameEnvKey];
@@ -63,17 +63,18 @@ export async function authenticate(userKey, env, state) {
   const response = await axios.post(`${service.baseUri}${loginEndpoint}`, { username, password });
 
   // Extract token and user from response using configured paths
-  const token = getByPath(response.data, authConfig.tokenPath);
-  const user = getByPath(response.data, authConfig.userPath);
+  const tokenPath = authConfig.tokenPath || "token";
+  const userPath = authConfig.userPath || "user";
+  const token = getByPath(response.data, tokenPath);
+  const user = getByPath(response.data, userPath);
 
   if (!token) {
-    throw new Error(`Token not found in login response at path: ${authConfig.tokenPath}`);
+    throw new Error(`Token not found in login response at path: ${tokenPath}`);
   }
 
   // Cache and store user in state
   const authResult = { token, user };
   tokenCache.set(userKey, authResult);
-  state.users = state.users || {};
   state.users[userKey] = user;
 
   logger.info(`Successfully authenticated user: ${userKey}`);

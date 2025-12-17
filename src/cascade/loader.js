@@ -79,10 +79,6 @@ async function loadDatasetDirectory(datasetDir, env, state, options) {
 
   logger.debug(`Loading datasets from directory: ${resolvedDir}`);
 
-  if (!fs.existsSync(resolvedDir)) {
-    throw new Error(`Dataset directory not found: ${resolvedDir}`);
-  }
-
   const files = fs
     .readdirSync(resolvedDir)
     .filter((file) => file.endsWith(".js"))
