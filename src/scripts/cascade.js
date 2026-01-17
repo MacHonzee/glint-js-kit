@@ -56,14 +56,11 @@ async function cascadeCommand() {
     const env = await loadEnvironment(argv.env);
 
     // Execute datasets
-    const state = await execute(argv.dataset, env, {
+    await execute(argv.dataset, env, {
       logLevel: argv.logLevel,
       dryRun: argv.dryRun,
       options,
     });
-
-    console.log("\nExecution completed successfully!");
-    console.log("Final state:", JSON.stringify(state, null, 2));
   } catch (error) {
     console.error("\nExecution failed:", error);
     if (error.response) {
