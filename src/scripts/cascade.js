@@ -65,7 +65,7 @@ async function cascadeCommand() {
     console.log("\nExecution completed successfully!");
     console.log("Final state:", JSON.stringify(state, null, 2));
   } catch (error) {
-    console.error("\nExecution failed:", error.message);
+    console.error("\nExecution failed:", error);
     if (error.response) {
       console.error("Response status:", error.response.status);
       console.error("Response data:", JSON.stringify(error.response.data, null, 2));

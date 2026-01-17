@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { pathToFileURL } from "url";
 import dotenv from "dotenv";
 import { getLogger } from "./logger.js";
 
@@ -28,7 +29,7 @@ export async function loadEnvironment(envPath) {
   }
 
   // Load environment config
-  const envModule = await import(path.resolve(envPath));
+  const envModule = await import(pathToFileURL(envPath));
   const env = envModule.default || envModule;
 
   logger.info(`Loaded environment: ${env.name}`);
@@ -49,7 +50,7 @@ async function loadDatasetFile(datasetPath, env, state, options) {
 
   logger.debug(`Loading dataset file: ${resolvedPath}`);
 
-  const datasetModule = await import(`file://${resolvedPath}`);
+  const datasetModule = await import(pathToFileURL(datasetPath));
   const datasetFunction = datasetModule.default || datasetModule;
 
   if (typeof datasetFunction !== "function") {
