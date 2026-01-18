@@ -186,6 +186,218 @@ describe("Auth Manager", () => {
       await expect(authenticate("testUser", env, state)).rejects.toThrow("Credentials not found");
     });
 
+    test("should throw error with proper message when only username missing", async () => {
+      process.env.TEST_PASSWORD = "testpass";
+
+      const env = {
+        services: { main: { baseUri: "http://localhost:3000" } },
+        authentication: {
+          service: "main",
+          loginEndpoint: "/auth/login",
+          tokenPath: "token",
+          userPath: "user",
+          users: {
+            testUser: {
+              usernameEnvKey: "MISSING_USERNAME",
+              passwordEnvKey: "TEST_PASSWORD",
+            },
+          },
+        },
+      };
+
+      const state = { users: {} };
+
+      await expect(authenticate("testUser", env, state)).rejects.toThrow("env var MISSING_USERNAME");
+
+      delete process.env.TEST_PASSWORD;
+    });
+
+    test("should throw error with proper message when only password missing", async () => {
+      process.env.TEST_USERNAME = "testuser";
+
+      const env = {
+        services: { main: { baseUri: "http://localhost:3000" } },
+        authentication: {
+          service: "main",
+          loginEndpoint: "/auth/login",
+          tokenPath: "token",
+          userPath: "user",
+          users: {
+            testUser: {
+              usernameEnvKey: "TEST_USERNAME",
+              passwordEnvKey: "MISSING_PASSWORD",
+            },
+          },
+        },
+      };
+
+      const state = { users: {} };
+
+      await expect(authenticate("testUser", env, state)).rejects.toThrow("env var MISSING_PASSWORD");
+
+      delete process.env.TEST_USERNAME;
+    });
+
+    test("should throw error when credentials missing without env keys", async () => {
+      const env = {
+        services: { main: { baseUri: "http://localhost:3000" } },
+        authentication: {
+          service: "main",
+          loginEndpoint: "/auth/login",
+          tokenPath: "token",
+          userPath: "user",
+          users: {
+            testUser: {
+              // No username, password, or env keys
+            },
+          },
+        },
+      };
+
+      const state = { users: {} };
+
+      await expect(authenticate("testUser", env, state)).rejects.toThrow("username");
+    });
+
+    test("should use direct username and password from config", async () => {
+      jest.spyOn(axios, "post").mockResolvedValue({
+        data: { token: "direct-token", user: { id: 1 } },
+      });
+
+      const env = {
+        services: { main: { baseUri: "http://localhost:3000" } },
+        authentication: {
+          service: "main",
+          loginEndpoint: "/auth/login",
+          tokenPath: "token",
+          userPath: "user",
+          users: {
+            testUser: {
+              username: "directuser",
+              password: "directpass",
+            },
+          },
+        },
+      };
+
+      const state = { users: {} };
+      const result = await authenticate("testUser", env, state);
+
+      expect(result.token).toBe("direct-token");
+      expect(axios.post).toHaveBeenCalledWith("http://localhost:3000/auth/login", {
+        username: "directuser",
+        password: "directpass",
+      });
+    });
+
+    test("should prefer direct credentials over env vars", async () => {
+      process.env.TEST_USERNAME = "envuser";
+      process.env.TEST_PASSWORD = "envpass";
+
+      jest.spyOn(axios, "post").mockResolvedValue({
+        data: { token: "preferred-token", user: {} },
+      });
+
+      const env = {
+        services: { main: { baseUri: "http://localhost:3000" } },
+        authentication: {
+          service: "main",
+          loginEndpoint: "/auth/login",
+          tokenPath: "token",
+          userPath: "user",
+          users: {
+            testUser: {
+              username: "directuser",
+              password: "directpass",
+              usernameEnvKey: "TEST_USERNAME",
+              passwordEnvKey: "TEST_PASSWORD",
+            },
+          },
+        },
+      };
+
+      const state = { users: {} };
+      await authenticate("testUser", env, state);
+
+      expect(axios.post).toHaveBeenCalledWith("http://localhost:3000/auth/login", {
+        username: "directuser",
+        password: "directpass",
+      });
+
+      delete process.env.TEST_USERNAME;
+      delete process.env.TEST_PASSWORD;
+    });
+
+    test("should fallback to env vars when direct credentials not provided", async () => {
+      process.env.FALLBACK_USERNAME = "fallbackuser";
+      process.env.FALLBACK_PASSWORD = "fallbackpass";
+
+      jest.spyOn(axios, "post").mockResolvedValue({
+        data: { token: "fallback-token", user: {} },
+      });
+
+      const env = {
+        services: { main: { baseUri: "http://localhost:3000" } },
+        authentication: {
+          service: "main",
+          loginEndpoint: "/auth/login",
+          tokenPath: "token",
+          userPath: "user",
+          users: {
+            testUser: {
+              usernameEnvKey: "FALLBACK_USERNAME",
+              passwordEnvKey: "FALLBACK_PASSWORD",
+            },
+          },
+        },
+      };
+
+      const state = { users: {} };
+      await authenticate("testUser", env, state);
+
+      expect(axios.post).toHaveBeenCalledWith("http://localhost:3000/auth/login", {
+        username: "fallbackuser",
+        password: "fallbackpass",
+      });
+
+      delete process.env.FALLBACK_USERNAME;
+      delete process.env.FALLBACK_PASSWORD;
+    });
+
+    test("should allow mixing direct username with env password", async () => {
+      process.env.MIXED_PASSWORD = "mixedpass";
+
+      jest.spyOn(axios, "post").mockResolvedValue({
+        data: { token: "mixed-token", user: {} },
+      });
+
+      const env = {
+        services: { main: { baseUri: "http://localhost:3000" } },
+        authentication: {
+          service: "main",
+          loginEndpoint: "/auth/login",
+          tokenPath: "token",
+          userPath: "user",
+          users: {
+            testUser: {
+              username: "directuser",
+              passwordEnvKey: "MIXED_PASSWORD",
+            },
+          },
+        },
+      };
+
+      const state = { users: {} };
+      await authenticate("testUser", env, state);
+
+      expect(axios.post).toHaveBeenCalledWith("http://localhost:3000/auth/login", {
+        username: "directuser",
+        password: "mixedpass",
+      });
+
+      delete process.env.MIXED_PASSWORD;
+    });
+
     test("should throw error when token not found in response", async () => {
       process.env.TEST_USERNAME = "testuser";
       process.env.TEST_PASSWORD = "testpass";

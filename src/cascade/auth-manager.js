@@ -47,15 +47,19 @@ export async function authenticate(userKey, env, state) {
 
   const loginEndpoint = authConfig.loginEndpoint || "/user/login";
 
-  // Get credentials from env vars
-  const username = process.env[userConfig.usernameEnvKey];
-  const password = process.env[userConfig.passwordEnvKey];
+  // Get credentials: prefer direct declaration, fallback to env vars
+  const username = userConfig.username || process.env[userConfig.usernameEnvKey];
+  const password = userConfig.password || process.env[userConfig.passwordEnvKey];
 
   if (!username || !password) {
-    throw new Error(
-      `Credentials not found for user '${userKey}'. ` +
-        `Check environment variables: ${userConfig.usernameEnvKey}, ${userConfig.passwordEnvKey}`,
-    );
+    const missing = [];
+    if (!username) {
+      missing.push(userConfig.usernameEnvKey ? `env var ${userConfig.usernameEnvKey}` : "username");
+    }
+    if (!password) {
+      missing.push(userConfig.passwordEnvKey ? `env var ${userConfig.passwordEnvKey}` : "password");
+    }
+    throw new Error(`Credentials not found for user '${userKey}'. Missing: ${missing.join(", ")}`);
   }
 
   // Call login endpoint
