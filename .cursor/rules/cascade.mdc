@@ -1,3 +1,8 @@
+---
+description: Rules for declaring backend endpoints to be called, useful for integration testing of deployed/localhost services and for automation.
+alwaysApply: false
+---
+
 # Cascade Module Documentation
 
 ## Overview
@@ -58,24 +63,42 @@ const state = await execute("./datasets/my-flow.js", env, {
 ## Environment Configuration Format
 
 ```javascript
+import dotenv from "dotenv";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load environment variables from .env file
+dotenv.config({ path: join(__dirname, "../.env.localhost") });
+
 export default {
-  name: "development",
+  name: "localhost",
   services: {
     main: {
-      baseUri: "http://localhost:3000",
-      defaultAuth: "mainUser1"  // Optional service-level default auth
+      baseUri: "http://localhost:8080",
+      defaultAuth: "authorityUser"  // Optional service-level default auth
     }
   },
   authentication: {
     service: "main",               // Default service for auth
-    loginEndpoint: "/user/login",
-    tokenPath: "token",            // Dot-notation path to extract token
-    userPath: "user",              // Dot-notation path to extract user
-    defaultAuth: "mainUser1",      // Global default auth (lowest priority)
+    defaultAuth: "authorityUser",  // Global default auth (lowest priority)
     users: {
-      mainUser1: {
-        usernameEnvKey: "MAIN_USER1_USERNAME",
-        passwordEnvKey: "MAIN_USER1_PASSWORD"
+      // Option 1: Direct credentials
+      testUser: {
+        username: "myuser",
+        password: "mypass"
+      },
+      // Option 2: Environment variables
+      authorityUser: {
+        usernameEnvKey: "CASCADE_AUTHORITY_USERNAME",
+        passwordEnvKey: "CASCADE_AUTHORITY_PASSWORD"
+      },
+      // Option 3: Mixed (direct username, env password)
+      mixedUser: {
+        username: "myuser",
+        passwordEnvKey: "API_PASSWORD"
       }
     }
   },
@@ -85,17 +108,115 @@ export default {
 };
 ```
 
+### Authentication Credential Options
+
+Cascade supports three ways to provide user credentials:
+
+**Option 1: Direct credentials in env file**
+```javascript
+users: {
+  testUser: {
+    username: "myuser",
+    password: "mypass"
+  }
+}
+```
+
+**Option 2: Environment variables (existing behavior)**
+```javascript
+users: {
+  authorityUser: {
+    usernameEnvKey: "CASCADE_AUTHORITY_USERNAME",
+    passwordEnvKey: "CASCADE_AUTHORITY_PASSWORD"
+  }
+}
+```
+
+**Option 3: Mixed (direct username, env password)**
+```javascript
+users: {
+  mixedUser: {
+    username: "myuser",
+    passwordEnvKey: "API_PASSWORD"
+  }
+}
+```
+
+### Environment Variable Naming Convention
+
+- Use role-based names, not environment-specific: `CASCADE_AUTHORITY_USERNAME` instead of `CASCADE_LOCALHOST_USERNAME`
+- The environment is obvious from the filename (e.g., `localhost.env.js`)
+- Format: `CASCADE_{ROLE}_{KEY}` (e.g., `CASCADE_AUTHORITY_USERNAME`, `CASCADE_AUTHORITY_PASSWORD`)
+- Store credentials in `.env.{environment}` files (gitignored)
+- Create `.env.{environment}.example` files as templates (committed to git)
+- For direct credentials, you can hardcode them in the env file (useful for test users)
+
 ## Dataset Format
 
 ```javascript
-export default async function(env, state, options = {}) {
+// Simple dataset without state or options
+export default function () {
   return {
     cascade: [
       {
         endpoint: "/user/create",
         service: "main",
-        method: "POST",
-        dtoIn: { email: options.email },
+        dtoIn: { email: "test@example.com" },
+        saveAs: "newUser"
+      }
+    ]
+  };
+}
+
+// Dataset using state to conditionally generate commands
+export default function (_env, state) {
+  const commands = [];
+  for (const user of state.saved?.userList?.users || []) {
+    commands.push({
+      endpoint: "/user/activate",
+      service: "main",
+      dtoIn: { userId: user._id },
+      saveAs: `activatedUser_${user._id}`
+    });
+  }
+  return { cascade: commands };
+}
+
+// Dataset with function-based dtoIn using state
+export default function () {
+  return {
+    cascade: [
+      {
+        endpoint: "/race/list",
+        service: "main",
+        method: "GET",
+        dtoIn: {},
+        saveAs: "raceList"
+      },
+      {
+        endpoint: "/registration/list",
+        service: "main",
+        method: "GET",
+        dtoIn: (state) => {
+          // Access previously saved data from state.saved
+          const races = state.saved?.raceList?.races || [];
+          const firstRace = races[0];
+          return firstRace ? { raceId: firstRace._id } : null;
+        },
+        saveAs: "firstRaceRegistrations"
+      }
+    ]
+  };
+}
+
+// Dataset with options (when needed)
+export default function (_env, state, options = {}) {
+  return {
+    cascade: [
+      {
+        endpoint: "/user/create",
+        service: "main",
+        dtoIn: { email: options.email || "default@example.com" },
         saveAs: "newUser"
       },
       {
@@ -110,6 +231,13 @@ export default async function(env, state, options = {}) {
 }
 ```
 
+### Function Signature Guidelines
+
+- **No parameters**: Use `function ()` when you don't need `env`, `state`, or `options`
+- **State only**: Use `function (_env, state)` when you need to access `state.saved` to conditionally generate commands
+- **With options**: Use `function (_env, state, options = {})` only when you need to accept options from CLI or imports
+- **Remove unused parameters**: Never include `options = {}` if not used, and prefix unused parameters with `_` (e.g., `_env`)
+
 ## Command Schema
 
 | Property | Type | Required | Description |
@@ -117,8 +245,8 @@ export default async function(env, state, options = {}) {
 | `endpoint` | string | Yes* | API endpoint path |
 | `service` | string | Yes* | Service name from env config |
 | `auth` | string | No | User key (overrides defaultAuth) |
-| `method` | string | No | HTTP method (default: POST) |
-| `dtoIn` | object/function | No | Request body or function `(state) => object` |
+| `method` | string | No | HTTP method (default: POST). Omit for POST requests |
+| `dtoIn` | object/function | No | Request body or function `(state) => object` that receives state |
 | `saveAs` | string | No | Key to save response.data under in state |
 | `allowedErrorCodes` | string[] | No | Array of error codes to allow |
 | `allowedError` | function | No | Custom `(error, response) => boolean` |
@@ -161,12 +289,21 @@ By default, any 4xx/5xx response stops execution. To allow specific errors:
 {
   endpoint: "/user/activate",
   service: "main",
-  allowedErrorCodes: ["alreadyActive", "userNotFound"],
+  allowedErrorCodes: ["glint-js/userNotFound"],  // Use full error code format
   allowedError: (error, response) => {
-    return response?.data?.code === "verificationPending";
+    // Only use allowedError for complex conditions
+    // Prefer allowedErrorCodes for simple notFound errors
+    return response?.data?.code === "glint-js/verificationPending";
   }
 }
 ```
+
+### Error Handling Best Practices
+
+- **Only skip notFound errors**: Use `allowedErrorCodes: ["glint-js/entityNotFound"]` for expected not-found scenarios
+- **Don't skip all 400 errors**: A 400 status can indicate validation errors or business logic errors that should fail
+- **Use allowedError sparingly**: Only for complex conditions that can't be expressed with error codes
+- **Error code format**: Use full error codes like `"glint-js/userNotFound"` instead of just `"userNotFound"`
 
 ## Logging
 
@@ -175,14 +312,129 @@ Cascade uses Winston for logging. Levels:
 - `info`: Progress updates (default)
 - `debug`: Detailed request/response info
 
+## State-Based Command Generation
+
+You can use `state.saved` to conditionally generate commands based on previous responses:
+
+```javascript
+export default function (_env, state) {
+  const commands = [];
+  
+  // Generate commands for each item in saved state
+  for (const race of state.saved?.raceList?.races || []) {
+    commands.push({
+      endpoint: "/registration/list",
+      service: "main",
+      method: "GET",
+      dtoIn: { raceId: race._id },
+      saveAs: `raceRegistrations_${race._id}`
+    });
+  }
+  
+  return { cascade: commands };
+}
+```
+
+This pattern is more efficient than generating fixed-size arrays and returning `null` from `dtoIn` functions.
+
+## Function-Based dtoIn
+
+You can use a function for `dtoIn` that receives the current state. This is useful when you need to reference previously saved data:
+
+```javascript
+export default function () {
+  return {
+    cascade: [
+      {
+        endpoint: "/race/list",
+        service: "main",
+        method: "GET",
+        dtoIn: {},
+        saveAs: "raceList"
+      },
+      {
+        endpoint: "/registration/list",
+        service: "main",
+        method: "GET",
+        dtoIn: (state) => {
+          // Access previously saved data from state
+          const races = state.saved?.raceList?.races || [];
+          const firstRace = races[0];
+          return firstRace ? { raceId: firstRace._id } : null;
+        },
+        saveAs: "firstRaceRegistrations"
+      },
+      {
+        endpoint: "/user/get",
+        service: "main",
+        method: "GET",
+        dtoIn: (state) => {
+          // Use data from any previously saved response
+          return { _id: state.saved?.raceList?.races?.[0]?.userId };
+        }
+      }
+    ]
+  };
+}
+```
+
+**Note**: When using function-based `dtoIn`, the function receives the current state object which contains:
+- `state.saved` - All responses saved via `saveAs`
+- `state.users` - Authenticated user objects
+- `state.params` - Parameters passed from imports
+
+## Modular Dataset Structure
+
+Split complex operations into separate files for better organization:
+
+```
+datasets/
+├── wipe/
+│   ├── wipe-registrations.js    # Main orchestrator
+│   ├── wipe-races.js            # Main orchestrator
+│   └── tools/
+│       ├── list-races.js        # Lists races
+│       ├── list-registrations.js # Lists registrations per race
+│       ├── delete-registrations.js # Deletes registrations
+│       └── delete-races.js     # Deletes races
+```
+
+Each tool file handles one responsibility and can be imported independently.
+
+## Common Helpers
+
+Extract reusable logic to helper files:
+
+```javascript
+// datasets/common/race-helpers.js
+export function generateRaceDates(options = {}) {
+  // Common date calculation logic
+}
+
+export function generateStandardCategories() {
+  // Common category generation
+}
+```
+
+Import helpers in your datasets:
+
+```javascript
+import { generateRaceDates, generateStandardCategories } from "../common/race-helpers.js";
+```
+
 ## Best Practices
 
-1. Keep datasets focused and reusable
-2. Use imports for common workflows
-3. Store credentials in `.env` files (gitignored)
-4. Use `saveAs` sparingly - only save what's needed
-5. Leverage function-based `dtoIn` for dynamic data
-6. Use service-level `defaultAuth` for service-specific defaults
+1. **Keep datasets focused and reusable** - Each file should do one thing well
+2. **Use imports for common workflows** - Import directories or specific files
+3. **Store credentials in `.env` files** - Use dotenv to load from `.env.{environment}` files (gitignored)
+4. **Use `saveAs` sparingly** - Only save what's needed for subsequent commands
+5. **Leverage state.saved for conditional generation** - Generate commands based on actual data, not fixed arrays
+6. **Remove unused parameters** - Don't include `options = {}` or parameters you don't use
+7. **Omit default method** - Don't specify `method: "POST"` as it's the default
+8. **Use role-based env var names** - `CASCADE_AUTHORITY_USERNAME` not `CASCADE_LOCALHOST_USERNAME`
+9. **Extract common logic** - Create helper files for shared functionality
+10. **Modular structure** - Split complex operations into separate tool files
+11. **Error handling** - Only skip notFound errors, not all 400 errors
 
 ## Future Features
 
