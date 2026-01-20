@@ -1,28 +1,25 @@
 module.exports = {
-  "env": {
-    "browser": true,
-    "es2021": true,
-    "jest": true
+  env: {
+    browser: true,
+    es2021: true,
+    jest: true,
   },
-  "extends": [
+  extends: [
     "eslint:recommended",
     "plugin:react/recommended",
     "plugin:prettier/recommended",
     "prettier",
     "react-app",
-    "react-app/jest"
+    "react-app/jest",
   ],
-  "plugins": [
-    "react",
-    "prettier"
-  ],
-  "parserOptions": {
-    "ecmaVersion": "latest",
-    "sourceType": "module"
+  plugins: ["react", "prettier"],
+  parserOptions: {
+    ecmaVersion: "latest",
+    sourceType: "module",
   },
-  "rules": {
+  rules: {
     "react/prop-types": "off",
     "react/react-in-jsx-scope": "off",
-    "prettier/prettier": "warn"
-  }
+    "prettier/prettier": "warn",
+  },
 };

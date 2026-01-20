@@ -16,6 +16,11 @@ function isAllowedError(command, error) {
     return false; // Network errors are never allowed
   }
 
+  // If expectError is defined, automatically allow the error (assertions will validate it)
+  if (command.expectError && typeof command.expectError === "object") {
+    return true;
+  }
+
   // Check allowed error codes
   if (command.allowedErrorCodes && Array.isArray(command.allowedErrorCodes)) {
     const errorCode = response.data?.code;

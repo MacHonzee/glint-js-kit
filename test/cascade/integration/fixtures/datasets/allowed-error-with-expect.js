@@ -5,6 +5,7 @@ export default function () {
         endpoint: "/error/allowed",
         service: "main",
         method: "POST",
+        allowedErrorCodes: ["allowedError"],
         expectError: {
           status: 400,
           "data.code": "allowedError",

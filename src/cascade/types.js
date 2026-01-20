@@ -41,6 +41,8 @@
  * @property {Function} [allowedError]
  * @property {string} [import]
  * @property {Object} [params]
+ * @property {Record<string, any>} [expect] - Assertions for successful responses (dot-notation paths)
+ * @property {Record<string, any>} [expectError] - Assertions for error responses (dot-notation paths, auto-allows error)
  */
 
 /**

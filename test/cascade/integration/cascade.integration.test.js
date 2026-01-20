@@ -222,4 +222,17 @@ describe("Cascade Integration Tests", () => {
     // Actually, let's check if it uses the default - the server should respond to /user/login
     expect(state.users.testUser).toBeDefined();
   });
+
+  test("should handle allowedErrorCodes with expectError together", async () => {
+    const envPath = path.join(__dirname, "fixtures", "envs", "test.env.js");
+    const datasetPath = path.join(__dirname, "fixtures", "datasets", "allowed-error-with-expect.js");
+
+    const env = await loadEnvironment(envPath);
+    env.services.main.baseUri = serverInfo.url;
+
+    const state = await execute(datasetPath, env, {});
+
+    // Should have completed successfully with both allowedErrorCodes and expectError
+    expect(state.saved).toBeDefined();
+  });
 });

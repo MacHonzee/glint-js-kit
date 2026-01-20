@@ -1,6 +1,7 @@
 import { loadDatasets, loadImport } from "./loader.js";
 import { createState, resolveDtoIn, saveToState, mergeParams } from "./state-manager.js";
 import { makeRequest } from "./http-client.js";
+import { runAssertions } from "./assertions.js";
 import { getLogger } from "./logger.js";
 import path from "path";
 
@@ -57,7 +58,36 @@ async function processCommand(command, env, state, options, currentDatasetPath) 
   }
 
   // Make request
-  const response = await makeRequest(command, env, state, dtoIn);
+  let response;
+  try {
+    response = await makeRequest(command, env, state, dtoIn);
+  } catch (error) {
+    // If expectError is defined, the error should have been allowed by makeRequest
+    // But if it wasn't, we need to check if we should run expectError assertions
+    if (command.expectError && error.response) {
+      // This shouldn't happen if expectError auto-allows, but handle it just in case
+      response = error.response;
+    } else {
+      throw error;
+    }
+  }
+
+  // Run assertions
+  const isErrorResponse = response.status >= 400;
+
+  if (command.expectError && isErrorResponse) {
+    // Run expectError assertions on error responses
+    runAssertions(command.expectError, response);
+  } else if (command.expect && !isErrorResponse) {
+    // Run expect assertions on successful responses
+    runAssertions(command.expect, response);
+  } else if (command.expect && isErrorResponse) {
+    // If expect is defined but we got an error, that's a failure
+    throw new Error(`Expected successful response but got ${response.status}. Use expectError for error responses.`);
+  } else if (command.expectError && !isErrorResponse) {
+    // If expectError is defined but we got success, that's a failure
+    throw new Error(`Expected error response but got ${response.status}. Use expect for successful responses.`);
+  }
 
   // Save response if saveAs is specified
   if (command.saveAs && response.data) {

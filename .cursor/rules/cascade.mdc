@@ -250,10 +250,112 @@ export default function (_env, state, options = {}) {
 | `saveAs` | string | No | Key to save response.data under in state |
 | `allowedErrorCodes` | string[] | No | Array of error codes to allow |
 | `allowedError` | function | No | Custom `(error, response) => boolean` |
+| `expect` | object | No | Assertions for successful responses (dot-notation paths) |
+| `expectError` | object | No | Assertions for error responses (dot-notation paths, auto-allows error) |
 | `import` | string | Yes* | Relative path to dataset file or directory |
 | `params` | object | No | Parameters passed to imported dataset |
 
 *Either `endpoint`+`service` OR `import` is required.
+
+## Assertions
+
+Cascade supports declarative assertions using Chai matchers (similar to Jest). Assertions are defined directly in dataset files and run automatically when executing commands. No test runner required - assertions work in CLI, scripts, or any Node.js environment.
+
+### Success Assertions (`expect`)
+
+Use `expect` to validate successful responses (2xx status codes):
+
+```javascript
+{
+  endpoint: "/user/create",
+  service: "main",
+  dtoIn: { name: "Test" },
+  expect: {
+    status: 200,
+    "data.id": { toBeGreaterThan: 0 },
+    "data.name": "Created User",                    // Direct value = toEqual
+    "data.email": { toMatch: "@example" },
+    "data.createdAt": { toBeDefined: true },
+    "data.id": { $any: Number }                     // Asymmetric matcher
+  }
+}
+```
+
+### Error Assertions (`expectError`)
+
+Use `expectError` to validate error responses (4xx/5xx). This automatically allows the error (no need for `allowedErrorCodes`):
+
+```javascript
+{
+  endpoint: "/user/delete",
+  service: "main",
+  dtoIn: { id: 999 },
+  expectError: {
+    status: 404,
+    "data.code": "notFound",
+    "data.message": { toContain: "not found" }
+  }
+}
+```
+
+### Supported Matchers
+
+- **Direct values**: `"data.name": "Test"` - Deep equality (toEqual)
+- **toBe**: `{ toBe: value }` - Strict equality (===)
+- **toEqual**: `{ toEqual: value }` - Deep equality
+- **toBeDefined**: `{ toBeDefined: true }`
+- **toBeGreaterThan**: `{ toBeGreaterThan: n }`
+- **toContain**: `{ toContain: item }` - For arrays/strings
+- **toMatch**: `{ toMatch: pattern }` - Regex/string match (strings converted to RegExp)
+- **toHaveProperty**: `{ toHaveProperty: "key" }` or `{ toHaveProperty: ["key", value] }`
+- **toBeCloseTo**: `{ toBeCloseTo: n }` or `{ toBeCloseTo: [n, digits] }` - Default delta: 0.01
+- And more - see [Chai documentation](https://www.chaijs.com/api/bdd/) for full API
+
+### Asymmetric Matchers
+
+- **$any**: `{ $any: Number }` - Accept any instance of constructor (Number, String, Boolean, Object, Array, Function, Date, RegExp)
+- **$anything**: `{ $anything: true }` - Accept any value (checks existence)
+- **$arrayContaining**: `{ $arrayContaining: [1, 2] }` - Array contains these items
+- **$objectContaining**: `{ $objectContaining: { id: 1 } }` - Object contains these properties (supports nested asymmetric matchers)
+- **$stringContaining**: `{ $stringContaining: "@example" }` - String contains substring
+- **$stringMatching**: `{ $stringMatching: /^[A-Z]+/ }` or `{ $stringMatching: "^[A-Z]+" }` - String matches regex
+- **$closeTo**: `{ $closeTo: 3.14 }` or `{ $closeTo: [3.14, 2] }` - Number close to value (default delta: 0.01)
+
+### Negation
+
+Use `not` modifier to negate any matcher:
+
+```javascript
+"data.status": { not: { toBe: "deleted" } }
+```
+
+### Path Notation
+
+Use dot-notation for nested properties:
+
+```javascript
+expect: {
+  status: 200,                    // response.status
+  "data.user.id": 123,            // response.data.user.id
+  "data.items[0].name": "First"   // response.data.items[0].name
+}
+```
+
+### Combining with allowedErrorCodes
+
+You can use both `allowedErrorCodes` and `expectError` together:
+
+```javascript
+{
+  endpoint: "/error/allowed",
+  service: "main",
+  allowedErrorCodes: ["allowedError"],
+  expectError: {
+    status: 400,
+    "data.code": "allowedError"
+  }
+}
+```
 
 ## Authentication Priority
 
@@ -435,8 +537,3 @@ import { generateRaceDates, generateStandardCategories } from "../common/race-he
 9. **Extract common logic** - Create helper files for shared functionality
 10. **Modular structure** - Split complex operations into separate tool files
 11. **Error handling** - Only skip notFound errors, not all 400 errors
-
-## Future Features
-
-- Jest integration with declarative assertions
-- Test mode for validation without side effects
