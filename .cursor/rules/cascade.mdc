@@ -248,6 +248,7 @@ export default function (_env, state, options = {}) {
 | `method` | string | No | HTTP method (default: POST). Omit for POST requests |
 | `dtoIn` | object/function | No | Request body or function `(state) => object` that receives state |
 | `saveAs` | string | No | Key to save response.data under in state |
+| `registerAs` | string/object | No | Register dtoIn credentials as dynamic user for subsequent auth |
 | `allowedErrorCodes` | string[] | No | Array of error codes to allow |
 | `allowedError` | function | No | Custom `(error, response) => boolean` |
 | `expect` | object | No | Assertions for successful responses (dot-notation paths) |
@@ -362,6 +363,115 @@ You can use both `allowedErrorCodes` and `expectError` together:
 1. Command-level `auth` field (highest priority)
 2. Service-level `defaultAuth` in env config
 3. Global `defaultAuth` in authentication config (lowest priority)
+
+## Dynamic User Registration
+
+Use `registerAs` to programmatically register a user during cascade execution and use their credentials for subsequent authenticated requests. This is useful for testing user registration flows where you need to:
+
+1. Register a new user via API
+2. Authenticate with those credentials for subsequent requests
+
+### Simple Syntax
+
+When your dtoIn uses standard field names (`username` and `password`):
+
+```javascript
+{
+  endpoint: "/user/register",
+  service: "main",
+  dtoIn: { username: "testuser", password: "Test123!" },
+  registerAs: "newUser",
+  saveAs: "registeredUser"
+}
+```
+
+The simple syntax uses:
+- `username` field for login username
+- `password` field for login password
+
+### Explicit Syntax
+
+For custom field names, use an object with explicit paths:
+
+```javascript
+{
+  endpoint: "/user/register",
+  service: "main",
+  dtoIn: { login: "testuser", secret: "Test123!" },
+  registerAs: {
+    userKey: "newUser",
+    usernamePath: "login",
+    passwordPath: "secret"
+  }
+}
+```
+
+### Using Registered Users
+
+After registration, use the dynamic user in subsequent commands:
+
+```javascript
+{
+  endpoint: "/protected/resource",
+  service: "main",
+  auth: "newUser"  // Uses dynamically registered credentials
+}
+```
+
+### Complete Example
+
+```javascript
+export default function () {
+  return {
+    cascade: [
+      // Step 1: Register a new user
+      {
+        endpoint: "/user/register",
+        service: "main",
+        dtoIn: {
+          username: "newuser",
+          password: "SecurePass123!",
+          name: "New User"
+        },
+        registerAs: "newUser",
+        saveAs: "registeredUser",
+        expect: {
+          status: 200,
+          "data.id": { $any: Number }
+        }
+      },
+      // Step 2: Call protected endpoint as the new user
+      {
+        endpoint: "/user/profile",
+        service: "main",
+        method: "GET",
+        auth: "newUser",  // Authenticates with registered credentials
+        expect: {
+          status: 200,
+          "data.username": "newuser"
+        }
+      },
+      // Step 3: Update the user's profile
+      {
+        endpoint: "/user/profile",
+        service: "main",
+        auth: "newUser",
+        dtoIn: { bio: "Hello world!" },
+        expect: {
+          status: 200
+        }
+      }
+    ]
+  };
+}
+```
+
+### Notes
+
+- `registerAs` only works on successful responses (2xx status codes)
+- Credentials are extracted from the resolved `dtoIn`, not the response
+- Dynamic users are stored in memory and cleared between cascade executions
+- The registered user uses the same service as the registration endpoint for login
 
 ## Import Parameters
 

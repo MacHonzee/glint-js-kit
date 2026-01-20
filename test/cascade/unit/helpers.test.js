@@ -27,10 +27,40 @@ describe("Helpers", () => {
       expect(getByPath(obj, "")).toBe(obj);
     });
 
-    test("should handle array indices", () => {
+    test("should handle array indices with dot notation", () => {
       const obj = { items: [{ name: "first" }, { name: "second" }] };
       expect(getByPath(obj, "items.0.name")).toBe("first");
       expect(getByPath(obj, "items.1.name")).toBe("second");
+    });
+
+    test("should handle array indices with bracket notation", () => {
+      const obj = { items: [{ name: "first" }, { name: "second" }] };
+      expect(getByPath(obj, "items[0].name")).toBe("first");
+      expect(getByPath(obj, "items[1].name")).toBe("second");
+    });
+
+    test("should handle nested bracket notation", () => {
+      const obj = { data: { items: [{ values: [10, 20, 30] }] } };
+      expect(getByPath(obj, "data.items[0].values[1]")).toBe(20);
+    });
+
+    test("should return undefined for invalid array index on non-array", () => {
+      const obj = { name: "test" };
+      expect(getByPath(obj, "name[0]")).toBeUndefined();
+    });
+
+    test("should return undefined for out of bounds array index", () => {
+      const obj = { items: [1, 2, 3] };
+      expect(getByPath(obj, "items[10]")).toBeUndefined();
+    });
+
+    test("should handle path with only bracket notation", () => {
+      const obj = [
+        [1, 2],
+        [3, 4],
+      ];
+      expect(getByPath(obj, "[0][1]")).toBe(2);
+      expect(getByPath(obj, "[1][0]")).toBe(3);
     });
   });
 

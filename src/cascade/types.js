@@ -30,6 +30,13 @@
  */
 
 /**
+ * @typedef {Object} RegisterAsConfig
+ * @property {string} userKey - Key to identify this user for subsequent auth
+ * @property {string} [usernamePath] - Path in dtoIn to extract username (default: "email" or "username")
+ * @property {string} [passwordPath] - Path in dtoIn to extract password (default: "password")
+ */
+
+/**
  * @typedef {Object} Command
  * @property {string} [endpoint]
  * @property {string} [service]
@@ -43,6 +50,7 @@
  * @property {Object} [params]
  * @property {Record<string, any>} [expect] - Assertions for successful responses (dot-notation paths)
  * @property {Record<string, any>} [expectError] - Assertions for error responses (dot-notation paths, auto-allows error)
+ * @property {string|RegisterAsConfig} [registerAs] - Register dtoIn credentials as a dynamic user for subsequent auth
  */
 
 /**

@@ -2,8 +2,61 @@ import { loadDatasets, loadImport } from "./loader.js";
 import { createState, resolveDtoIn, saveToState, mergeParams } from "./state-manager.js";
 import { makeRequest } from "./http-client.js";
 import { runAssertions } from "./assertions.js";
+import { registerDynamicUser } from "./auth-manager.js";
+import { getByPath } from "./helpers.js";
 import { getLogger } from "./logger.js";
 import path from "path";
+
+/**
+ * Process registerAs to register a dynamic user from dtoIn credentials
+ * @param {string|Object} registerAs - Simple string (userKey) or object with userKey, usernamePath, passwordPath
+ * @param {Object} dtoIn - Resolved dtoIn containing credentials
+ * @param {import('./types.js').Command} command - Command object
+ * @param {import('./logger.js').Logger} logger - Logger instance
+ */
+function processRegisterAs(registerAs, dtoIn, command, logger) {
+  let userKey, usernamePath, passwordPath;
+
+  if (typeof registerAs === "string") {
+    // Simple syntax: registerAs: "newUser"
+    // Auto-detect username field, password from password field
+    userKey = registerAs;
+    usernamePath = "username";
+    passwordPath = "password";
+  } else if (typeof registerAs === "object" && registerAs !== null) {
+    // Explicit syntax: registerAs: { userKey: "newUser", usernamePath: "login", passwordPath: "secret" }
+    userKey = registerAs.userKey;
+    usernamePath = registerAs.usernamePath || "username";
+    passwordPath = registerAs.passwordPath || "password";
+  } else {
+    throw new Error(`Invalid registerAs value: expected string or object, got ${typeof registerAs}`);
+  }
+
+  if (!userKey) {
+    throw new Error("registerAs requires a userKey (string or object.userKey)");
+  }
+
+  // Extract credentials from dtoIn
+  const username = getByPath(dtoIn, usernamePath);
+  const password = getByPath(dtoIn, passwordPath);
+
+  if (!username) {
+    throw new Error(`Could not extract username from dtoIn at path '${usernamePath}' for registerAs '${userKey}'`);
+  }
+
+  if (!password) {
+    throw new Error(`Could not extract password from dtoIn at path '${passwordPath}' for registerAs '${userKey}'`);
+  }
+
+  // Register the dynamic user
+  registerDynamicUser(userKey, {
+    username,
+    password,
+    service: command.service, // Use the same service as the registration endpoint
+  });
+
+  logger.info(`Registered dynamic user '${userKey}' from dtoIn credentials`);
+}
 
 /**
  * Process a single command
@@ -93,6 +146,11 @@ async function processCommand(command, env, state, options, currentDatasetPath) 
   if (command.saveAs && response.data) {
     saveToState(state, command.saveAs, response.data);
     logger.debug(`Saved response to state.${command.saveAs}`);
+  }
+
+  // Register dynamic user if registerAs is specified (only on successful responses)
+  if (command.registerAs && !isErrorResponse) {
+    processRegisterAs(command.registerAs, dtoIn, command, logger);
   }
 }
 

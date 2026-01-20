@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from "@jest/globals";
 import { startServer, stopServer } from "./server.js";
 import { execute, loadEnvironment } from "../../../src/cascade/index.js";
-import { initLogger, clearCache } from "../../../src/cascade/index.js";
+import { initLogger, clearCache, clearDynamicUsers } from "../../../src/cascade/index.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
@@ -32,6 +32,7 @@ describe("Cascade Integration Tests", () => {
 
   beforeEach(() => {
     clearCache();
+    clearDynamicUsers();
   });
 
   test("should execute basic flow with create and read", async () => {
@@ -234,5 +235,34 @@ describe("Cascade Integration Tests", () => {
 
     // Should have completed successfully with both allowedErrorCodes and expectError
     expect(state.saved).toBeDefined();
+  });
+
+  test("should register dynamic user and authenticate with credentials (simple syntax)", async () => {
+    const envPath = path.join(__dirname, "fixtures", "envs", "test.env.js");
+    const datasetPath = path.join(__dirname, "fixtures", "datasets", "dynamic-user-test.js");
+
+    const env = await loadEnvironment(envPath);
+    env.services.main.baseUri = serverInfo.url;
+
+    const state = await execute(datasetPath, env, {});
+
+    // Should have registered and used the dynamic user
+    expect(state.saved.registeredUser).toBeDefined();
+    expect(state.saved.registeredUser.username).toBe("newuser@example.com");
+    expect(state.users.newUser).toBeDefined();
+  });
+
+  test("should register dynamic user with explicit registerAs config", async () => {
+    const envPath = path.join(__dirname, "fixtures", "envs", "test.env.js");
+    const datasetPath = path.join(__dirname, "fixtures", "datasets", "dynamic-user-explicit-test.js");
+
+    const env = await loadEnvironment(envPath);
+    env.services.main.baseUri = serverInfo.url;
+
+    const state = await execute(datasetPath, env, {});
+
+    // Should have registered and used the explicit user
+    expect(state.saved.registeredUser).toBeDefined();
+    expect(state.users.explicitUser).toBeDefined();
   });
 });

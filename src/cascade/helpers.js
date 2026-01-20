@@ -1,18 +1,67 @@
 /**
- * Simple implementation to access nested object properties using dot notation
+ * Access nested object properties using dot notation with array index support
+ * Supports both dot notation (items.0.name) and bracket notation (items[0].name)
  * @param {any} obj - The object to traverse
- * @param {string} path - Dot-notation path (e.g., "user.profile.name")
+ * @param {string} path - Path (e.g., "user.profile.name", "items[0].name", "data.items.0")
  * @returns {any} The value at the path, or undefined if not found
  */
 export function getByPath(obj, path) {
-  if (!path) return obj;
-  const keys = path.split(".");
-  let result = obj;
-  for (const key of keys) {
-    if (result == null) return undefined;
-    result = result[key];
+  if (!path || path === "") return obj;
+
+  // Split by dots, but preserve array indices like [0]
+  const parts = [];
+  let currentPart = "";
+  let inBrackets = false;
+
+  for (let i = 0; i < path.length; i++) {
+    const char = path[i];
+
+    if (char === "[") {
+      if (currentPart) {
+        parts.push(currentPart);
+        currentPart = "";
+      }
+      inBrackets = true;
+      currentPart += char;
+    } else if (char === "]") {
+      currentPart += char;
+      parts.push(currentPart);
+      currentPart = "";
+      inBrackets = false;
+    } else if (char === "." && !inBrackets) {
+      if (currentPart) {
+        parts.push(currentPart);
+        currentPart = "";
+      }
+    } else {
+      currentPart += char;
+    }
   }
-  return result;
+
+  if (currentPart) {
+    parts.push(currentPart);
+  }
+
+  let current = obj;
+
+  for (const part of parts) {
+    if (current === null || current === undefined) {
+      return undefined;
+    }
+
+    // Handle bracket array indexing like [0]
+    if (part.startsWith("[") && part.endsWith("]")) {
+      const index = parseInt(part.slice(1, -1), 10);
+      if (isNaN(index) || !Array.isArray(current)) {
+        return undefined;
+      }
+      current = current[index];
+    } else {
+      current = current[part];
+    }
+  }
+
+  return current;
 }
 
 /**

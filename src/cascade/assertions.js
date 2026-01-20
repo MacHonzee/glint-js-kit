@@ -1,5 +1,6 @@
 import { expect } from "chai";
 import { getLogger } from "./logger.js";
+import { getByPath } from "./helpers.js";
 
 /**
  * Custom assertion error with detailed context
@@ -14,74 +15,6 @@ export class CascadeAssertionError extends Error {
     this.received = details.received;
     this.response = details.response;
   }
-}
-
-/**
- * Resolve a dot-notation path to a value in an object
- * Supports array indexing: "data.items[0].name"
- * @param {Object} obj - Object to traverse
- * @param {string} path - Dot-notation path (e.g., "data.user.id" or "data.items[0].name")
- * @returns {any} Value at path or undefined
- */
-function getValueByPath(obj, path) {
-  if (!path || path === "") {
-    return obj;
-  }
-
-  // Split by dots, but preserve array indices like [0]
-  const parts = [];
-  let currentPart = "";
-  let inBrackets = false;
-
-  for (let i = 0; i < path.length; i++) {
-    const char = path[i];
-
-    if (char === "[") {
-      if (currentPart) {
-        parts.push(currentPart);
-        currentPart = "";
-      }
-      inBrackets = true;
-      currentPart += char;
-    } else if (char === "]") {
-      currentPart += char;
-      parts.push(currentPart);
-      currentPart = "";
-      inBrackets = false;
-    } else if (char === "." && !inBrackets) {
-      if (currentPart) {
-        parts.push(currentPart);
-        currentPart = "";
-      }
-    } else {
-      currentPart += char;
-    }
-  }
-
-  if (currentPart) {
-    parts.push(currentPart);
-  }
-
-  let current = obj;
-
-  for (const part of parts) {
-    if (current === null || current === undefined) {
-      return undefined;
-    }
-
-    // Handle array indexing like [0]
-    if (part.startsWith("[") && part.endsWith("]")) {
-      const index = parseInt(part.slice(1, -1), 10);
-      if (isNaN(index) || !Array.isArray(current)) {
-        return undefined;
-      }
-      current = current[index];
-    } else {
-      current = current[part];
-    }
-  }
-
-  return current;
 }
 
 /**
@@ -507,7 +440,7 @@ export function runAssertions(assertions, response) {
 
   // Process each assertion
   for (const [path, expected] of Object.entries(assertions)) {
-    const received = getValueByPath(responseObj, path);
+    const received = getByPath(responseObj, path);
 
     try {
       executeAssertion(path, expected, received, responseObj);

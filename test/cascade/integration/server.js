@@ -4,6 +4,9 @@ import url from "url";
 let server = null;
 let serverPort = null;
 
+// Track registered users for dynamic authentication (persists across requests)
+const registeredUsers = new Map();
+
 /**
  * Start HTTP test server
  * @returns {Promise<{port: number, url: string}>} Server port and URL
@@ -31,6 +34,7 @@ export function startServer() {
         });
         req.on("end", () => {
           const data = JSON.parse(body);
+          // Check static test user
           if (data.username === "testuser" && data.password === "testpass") {
             res.writeHead(200);
             res.end(
@@ -39,11 +43,88 @@ export function startServer() {
                 user: { id: 1, name: "Test User", email: "test@example.com" },
               }),
             );
+          }
+          // Check dynamically registered users (by email)
+          else if (
+            registeredUsers.has(data.username) &&
+            registeredUsers.get(data.username).password === data.password
+          ) {
+            const user = registeredUsers.get(data.username);
+            res.writeHead(200);
+            res.end(
+              JSON.stringify({
+                token: `token-${user.id}`,
+                user: { id: user.id, name: user.name, email: data.username },
+              }),
+            );
           } else {
             res.writeHead(401);
             res.end(JSON.stringify({ code: "invalidCredentials", message: "Invalid credentials" }));
           }
         });
+        return;
+      }
+
+      if (pathname === "/user/register" && method === "POST") {
+        let body = "";
+        req.on("data", (chunk) => {
+          body += chunk.toString();
+        });
+        req.on("end", () => {
+          const data = JSON.parse(body);
+          const userId = Math.floor(Math.random() * 10000) + 100;
+          // Support username or login field for flexibility
+          const loginKey = data.username || data.login;
+          const passwordValue = data.password || data.secret;
+          // Store registered user for subsequent login
+          registeredUsers.set(loginKey, {
+            id: userId,
+            name: data.name || "Registered User",
+            password: passwordValue,
+          });
+          res.writeHead(200);
+          res.end(
+            JSON.stringify({
+              id: userId,
+              name: data.name || "Registered User",
+              username: loginKey,
+            }),
+          );
+        });
+        return;
+      }
+
+      if (pathname === "/user/profile" && method === "GET") {
+        // Check authorization header
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+          res.writeHead(401);
+          res.end(JSON.stringify({ code: "unauthorized", message: "Missing authorization" }));
+          return;
+        }
+        // Return profile based on token
+        const token = authHeader.replace("Bearer ", "");
+        if (token.startsWith("token-")) {
+          const userId = parseInt(token.replace("token-", ""));
+          res.writeHead(200);
+          res.end(JSON.stringify({ id: userId, name: "Registered User", email: "registered@example.com" }));
+        } else {
+          res.writeHead(200);
+          res.end(JSON.stringify({ id: 1, name: "Test User", email: "test@example.com" }));
+        }
+        return;
+      }
+
+      if (pathname === "/protected/resource" && method === "GET") {
+        // Check authorization header
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+          res.writeHead(401);
+          res.end(JSON.stringify({ code: "unauthorized", message: "Missing authorization" }));
+          return;
+        }
+        res.writeHead(200);
+        res.end(JSON.stringify({ message: "Protected resource accessed successfully", token: authHeader }));
         return;
       }
 
@@ -113,6 +194,7 @@ export function stopServer() {
       server.close(() => {
         server = null;
         serverPort = null;
+        registeredUsers.clear(); // Clear registered users for clean state
         resolve();
       });
     } else {
