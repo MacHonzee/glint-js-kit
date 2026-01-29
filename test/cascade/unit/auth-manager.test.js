@@ -11,9 +11,8 @@ jest.unstable_mockModule("../../../src/cascade/logger.js", () => ({
 }));
 
 // Import after mocking
-const { authenticate, getToken, clearCache, registerDynamicUser, clearDynamicUsers, isDynamicUser } = await import(
-  "../../../src/cascade/auth-manager.js"
-);
+const { authenticate, getToken, clearCache, registerDynamicUser, clearDynamicUsers, isDynamicUser } =
+  await import("../../../src/cascade/auth-manager.js");
 
 describe("Auth Manager", () => {
   beforeEach(() => {

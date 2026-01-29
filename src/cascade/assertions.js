@@ -79,7 +79,7 @@ function processNestedObjectContaining(obj, received) {
             const typeStr = getChaiType(matcherValue);
             try {
               expect(receivedValue).to.be.a(typeStr);
-            } catch (error) {
+            } catch {
               return false;
             }
             break;
@@ -95,7 +95,7 @@ function processNestedObjectContaining(obj, received) {
             // For other asymmetric matchers, use deep equality for now
             try {
               expect(receivedValue).to.deep.equal(matcherValue);
-            } catch (error) {
+            } catch {
               return false;
             }
         }
@@ -103,7 +103,7 @@ function processNestedObjectContaining(obj, received) {
         // Regular value - check deep equality
         try {
           expect(receivedValue).to.deep.equal(expected);
-        } catch (error) {
+        } catch {
           return false;
         }
       }
@@ -111,7 +111,7 @@ function processNestedObjectContaining(obj, received) {
       // Regular value - check deep equality
       try {
         expect(receivedValue).to.deep.equal(expected);
-      } catch (error) {
+      } catch {
         return false;
       }
     }

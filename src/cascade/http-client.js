@@ -33,7 +33,7 @@ function isAllowedError(command, error) {
   if (command.allowedError && typeof command.allowedError === "function") {
     try {
       return command.allowedError(error, response);
-    } catch (err) {
+    } catch {
       // If the function throws, don't allow the error
       return false;
     }
