@@ -830,6 +830,58 @@ describe("Auth Manager", () => {
       );
     });
 
+    test("should invalidate cached token when dynamic user is re-registered with new credentials", async () => {
+      // Scenario A - register first identity and authenticate, populating the token cache.
+      jest.spyOn(axios, "post").mockResolvedValueOnce({
+        data: { token: "token-A", user: { id: 1, name: "User A" } },
+      });
+
+      registerDynamicUser("buyerUser", {
+        username: "user-a@example.com",
+        password: "PassA123!",
+      });
+
+      const env = {
+        services: { main: { baseUri: "http://localhost:3000" } },
+        authentication: {
+          service: "main",
+          loginEndpoint: "/auth/login",
+          tokenPath: "token",
+          userPath: "user",
+          users: {},
+        },
+      };
+
+      const state = { users: {} };
+
+      const firstResult = await authenticate("buyerUser", env, state);
+      expect(firstResult.token).toBe("token-A");
+      expect(axios.post).toHaveBeenCalledTimes(1);
+
+      // Scenario B - re-register the SAME alias with a brand new identity.
+      // This must invalidate the previously cached token, otherwise subsequent
+      // authenticate() calls would silently still act as User A.
+      jest.spyOn(axios, "post").mockResolvedValueOnce({
+        data: { token: "token-B", user: { id: 2, name: "User B" } },
+      });
+
+      registerDynamicUser("buyerUser", {
+        username: "user-b@example.com",
+        password: "PassB123!",
+      });
+
+      const secondResult = await authenticate("buyerUser", env, state);
+
+      expect(axios.post).toHaveBeenCalledTimes(2);
+      expect(axios.post).toHaveBeenLastCalledWith("http://localhost:3000/auth/login", {
+        username: "user-b@example.com",
+        password: "PassB123!",
+      });
+      expect(secondResult.token).toBe("token-B");
+      expect(secondResult.user).toEqual({ id: 2, name: "User B" });
+      expect(state.users.buyerUser).toEqual({ id: 2, name: "User B" });
+    });
+
     test("should cache dynamic user token", async () => {
       jest.spyOn(axios, "post").mockResolvedValue({
         data: { token: "dynamic-token", user: {} },

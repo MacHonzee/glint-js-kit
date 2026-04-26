@@ -41,6 +41,11 @@ export function registerDynamicUser(userKey, credentials) {
     throw new Error(`Credentials (username and password) are required for dynamic user '${userKey}'`);
   }
 
+  // Any previously cached token for this alias is now stale - it was issued for a different identity.
+  // Re-binding the alias to a (potentially) new identity must invalidate any cached token under that alias,
+  // otherwise subsequent authenticate() calls would silently keep returning the OLD user's token.
+  tokenCache.delete(userKey);
+
   dynamicUsers.set(userKey, {
     username: credentials.username,
     password: credentials.password,
