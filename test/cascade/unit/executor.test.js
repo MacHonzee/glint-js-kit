@@ -163,8 +163,116 @@ describe("Executor", () => {
       };
 
       await expect(execute("./test.js", env, {})).rejects.toThrow(
-        "Command must have either 'import' or both 'endpoint' and 'service'",
+        /Command must have either 'import', 'url', or both 'endpoint' and 'service'/,
       );
+    });
+
+    test("should execute absolute url command without service/endpoint", async () => {
+      const jpeg = Buffer.from([0xff, 0xd8]);
+      const commands = [
+        {
+          url: "http://localhost:3000/upload",
+          method: "PUT",
+          body: jpeg,
+          headers: { "Content-Type": "image/jpeg" },
+          auth: false,
+          expect: { status: 200 },
+        },
+      ];
+
+      mockLoadDatasets.mockResolvedValue(commands);
+      mockMakeRequest.mockResolvedValue({ status: 200, data: "" });
+
+      const env = {
+        services: { main: { baseUri: "http://localhost:3000" } },
+        authentication: {},
+        config: {},
+      };
+
+      await execute("./test.js", env, {});
+
+      expect(mockMakeRequest).toHaveBeenCalledWith(commands[0], env, expect.any(Object), expect.any(Object));
+      expect(mockRunAssertions).toHaveBeenCalledWith({ status: 200 }, expect.objectContaining({ status: 200 }));
+    });
+
+    test("should throw when url and service are both set", async () => {
+      mockLoadDatasets.mockResolvedValue([
+        {
+          url: "http://localhost:3000/upload",
+          service: "main",
+          endpoint: "/upload",
+        },
+      ]);
+
+      const env = {
+        services: { main: { baseUri: "http://localhost:3000" } },
+        authentication: {},
+        config: {},
+      };
+
+      await expect(execute("./test.js", env, {})).rejects.toThrow(/cannot have both 'url' and 'service'\/'endpoint'/);
+    });
+
+    test("should throw when body and dtoIn are both set", async () => {
+      mockLoadDatasets.mockResolvedValue([
+        {
+          url: "http://localhost:3000/upload",
+          body: Buffer.from("x"),
+          dtoIn: { a: 1 },
+        },
+      ]);
+
+      const env = {
+        services: { main: { baseUri: "http://localhost:3000" } },
+        authentication: {},
+        config: {},
+      };
+
+      await expect(execute("./test.js", env, {})).rejects.toThrow(/cannot have both 'body' and 'dtoIn'/);
+    });
+
+    test("should not call makeRequest for absolute url dry-run", async () => {
+      mockLoadDatasets.mockResolvedValue([
+        {
+          url: (state) => state.saved?.uploadUrl || "http://localhost:3000/upload",
+          method: "PUT",
+          body: Buffer.from("abc"),
+          auth: false,
+        },
+      ]);
+
+      const env = {
+        services: { main: { baseUri: "http://localhost:3000" } },
+        authentication: {},
+        config: {},
+      };
+
+      await execute("./test.js", env, { dryRun: true });
+
+      expect(mockMakeRequest).not.toHaveBeenCalled();
+    });
+
+    test("should save status wrapper when saveAs is set and response data is empty", async () => {
+      mockLoadDatasets.mockResolvedValue([
+        {
+          url: "http://localhost:3000/upload",
+          method: "PUT",
+          body: Buffer.from("x"),
+          auth: false,
+          saveAs: "uploadResult",
+        },
+      ]);
+      mockMakeRequest.mockResolvedValue({ status: 200, data: "" });
+
+      const env = {
+        services: { main: { baseUri: "http://localhost:3000" } },
+        authentication: {},
+        config: {},
+      };
+
+      await execute("./test.js", env, {});
+
+      expect(mockSaveToState).toHaveBeenCalledWith(expect.any(Object), "uploadResult", { status: 200 });
     });
 
     test("should log error details when command fails with response", async () => {

@@ -59,6 +59,64 @@ function processRegisterAs(registerAs, dtoIn, command, logger) {
 }
 
 /**
+ * Validate command shape (import / absolute url / service+endpoint)
+ * @param {import('./types.js').Command} command
+ */
+function validateCommand(command) {
+  if (command.import) {
+    return;
+  }
+
+  const hasUrl = command.url != null;
+  const hasService = command.service != null;
+  const hasEndpoint = command.endpoint != null;
+
+  if (hasUrl && (hasService || hasEndpoint)) {
+    throw new Error(
+      "Command cannot have both 'url' and 'service'/'endpoint'. Use absolute url mode or service mode, not both.",
+    );
+  }
+
+  if (command.body != null && command.dtoIn != null) {
+    throw new Error("Command cannot have both 'body' and 'dtoIn'");
+  }
+
+  if (hasUrl) {
+    return;
+  }
+
+  if (hasService && hasEndpoint) {
+    return;
+  }
+
+  throw new Error("Command must have either 'import', 'url', or both 'endpoint' and 'service'");
+}
+
+/**
+ * Describe body for dry-run logging
+ * @param {any} body
+ * @returns {string}
+ */
+function describeDryRunBody(body) {
+  if (body == null) {
+    return "empty";
+  }
+  if (Buffer.isBuffer(body)) {
+    return `binary ${body.length} bytes`;
+  }
+  if (body instanceof Uint8Array) {
+    return `binary ${body.byteLength} bytes`;
+  }
+  if (body instanceof ArrayBuffer) {
+    return `binary ${body.byteLength} bytes`;
+  }
+  if (typeof body === "string") {
+    return `string ${body.length} chars`;
+  }
+  return `json ${JSON.stringify(body)}`;
+}
+
+/**
  * Process a single command
  * @param {import('./types.js').Command} command - Command to process
  * @param {import('./types.js').EnvironmentConfig} env - Environment configuration
@@ -95,18 +153,29 @@ async function processCommand(command, env, state, options, currentDatasetPath) 
     return;
   }
 
-  // Handle API commands
-  if (!command.endpoint || !command.service) {
-    throw new Error("Command must have either 'import' or both 'endpoint' and 'service'");
-  }
+  validateCommand(command);
 
-  // Resolve dtoIn
+  // Resolve dtoIn (empty object when omitted — used by service mode / registerAs)
   const dtoIn = resolveDtoIn(command.dtoIn, state);
+  const method = (command.method || "POST").toUpperCase();
 
   // Dry run mode
   if (options.dryRun) {
-    logger.info(`[DRY RUN] Would execute ${command.method || "POST"} ${command.endpoint}`);
-    logger.debug(`[DRY RUN] dtoIn: ${JSON.stringify(dtoIn, null, 2)}`);
+    if (command.url != null) {
+      const resolvedUrl = typeof command.url === "function" ? command.url(state) : command.url;
+      let bodyDesc = "empty";
+      if (command.body != null) {
+        const body = typeof command.body === "function" ? command.body(state) : command.body;
+        bodyDesc = describeDryRunBody(body);
+      } else if (command.dtoIn != null) {
+        bodyDesc = describeDryRunBody(dtoIn);
+      }
+      logger.info(`[DRY RUN] Would execute ${method} ${resolvedUrl}`);
+      logger.debug(`[DRY RUN] body: ${bodyDesc}`);
+    } else {
+      logger.info(`[DRY RUN] Would execute ${method} ${command.endpoint}`);
+      logger.debug(`[DRY RUN] dtoIn: ${JSON.stringify(dtoIn, null, 2)}`);
+    }
     return;
   }
 
@@ -143,8 +212,10 @@ async function processCommand(command, env, state, options, currentDatasetPath) 
   }
 
   // Save response if saveAs is specified
-  if (command.saveAs && response.data) {
-    saveToState(state, command.saveAs, response.data);
+  if (command.saveAs) {
+    const hasData = response.data !== undefined && response.data !== "";
+    const toSave = hasData ? response.data : { status: response.status };
+    saveToState(state, command.saveAs, toSave);
     logger.debug(`Saved response to state.${command.saveAs}`);
   }
 

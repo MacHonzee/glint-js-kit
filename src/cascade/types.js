@@ -38,11 +38,14 @@
 
 /**
  * @typedef {Object} Command
- * @property {string} [endpoint]
- * @property {string} [service]
- * @property {string} [auth]
- * @property {string} [method]
- * @property {Object|Function} [dtoIn]
+ * @property {string} [endpoint] - API endpoint path (requires service; mutually exclusive with url)
+ * @property {string} [service] - Service name from env config (requires endpoint; mutually exclusive with url)
+ * @property {string|((state: State) => string)} [url] - Absolute http(s) URL (mutually exclusive with service+endpoint)
+ * @property {string|false} [auth] - User key, or false to disable auth (absolute url defaults to no auth when omitted)
+ * @property {string} [method] - HTTP method (default: POST)
+ * @property {Object|Function} [dtoIn] - JSON request body/params, or function `(state) => object`
+ * @property {Buffer|Uint8Array|string|ArrayBuffer|Function} [body] - Raw body (mutually exclusive with dtoIn)
+ * @property {Object|Function} [headers] - Extra request headers, or function `(state) => object`
  * @property {string} [saveAs]
  * @property {string[]} [allowedErrorCodes]
  * @property {Function} [allowedError]

@@ -172,5 +172,39 @@ describe("Helpers", () => {
       };
       expect(resolveAuth(command, env)).toBe("globalUser");
     });
+
+    test("should return null when auth is false", () => {
+      const command = { auth: false, service: "main" };
+      const env = {
+        services: {
+          main: { defaultAuth: "serviceUser" },
+        },
+        authentication: {
+          defaultAuth: "globalUser",
+        },
+      };
+      expect(resolveAuth(command, env)).toBeNull();
+    });
+
+    test("should return null for absolute url when auth is omitted", () => {
+      const command = { url: "https://example.com/upload" };
+      const env = {
+        services: {
+          main: { defaultAuth: "serviceUser" },
+        },
+        authentication: {
+          defaultAuth: "globalUser",
+        },
+      };
+      expect(resolveAuth(command, env)).toBeNull();
+    });
+
+    test("should return command auth for absolute url when auth is a user key", () => {
+      const command = { url: "https://example.com/upload", auth: "commandUser" };
+      const env = {
+        authentication: { defaultAuth: "globalUser" },
+      };
+      expect(resolveAuth(command, env)).toBe("commandUser");
+    });
   });
 });

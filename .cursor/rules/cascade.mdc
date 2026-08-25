@@ -244,10 +244,13 @@ export default function (_env, state, options = {}) {
 |---------|------|----------|-------------|
 | `endpoint` | string | Yes* | API endpoint path |
 | `service` | string | Yes* | Service name from env config |
-| `auth` | string | No | User key (overrides defaultAuth) |
+| `url` | string/function | Yes* | Absolute `http(s)` URL, or `(state) => string` (mutually exclusive with `service`/`endpoint`) |
+| `auth` | string/false | No | User key, or `false` to disable auth. Absolute URL mode defaults to no auth when omitted |
 | `method` | string | No | HTTP method (default: POST). Omit for POST requests |
-| `dtoIn` | object/function | No | Request body or function `(state) => object` that receives state |
-| `saveAs` | string | No | Key to save response.data under in state |
+| `dtoIn` | object/function | No | JSON body/params or function `(state) => object` |
+| `body` | Buffer/Uint8Array/string/ArrayBuffer/function | No | Raw body (mutually exclusive with `dtoIn`) |
+| `headers` | object/function | No | Extra request headers, or `(state) => object` |
+| `saveAs` | string | No | Key to save response.data under in state (saves `{ status }` when response body is empty) |
 | `registerAs` | string/object | No | Register dtoIn credentials as dynamic user for subsequent auth |
 | `allowedErrorCodes` | string[] | No | Array of error codes to allow |
 | `allowedError` | function | No | Custom `(error, response) => boolean` |
@@ -256,7 +259,28 @@ export default function (_env, state, options = {}) {
 | `import` | string | Yes* | Relative path to dataset file or directory |
 | `params` | object | No | Parameters passed to imported dataset |
 
-*Either `endpoint`+`service` OR `import` is required.
+*Either `endpoint`+`service`, **or** `url`, **or** `import` is required. Do not combine `url` with `service`/`endpoint`. Do not set both `body` and `dtoIn`.
+
+### Absolute URL + raw body (signed GCS / fake-gcs uploads)
+
+```javascript
+{
+  url: (state) => state.saved.photoCreate.uploadUrl,
+  method: "PUT", // or "POST" for fake-gcs media upload — pick when building the cascade
+  body: (state) => state.params.fixtureJpeg, // Buffer
+  headers: { "Content-Type": "image/jpeg" },
+  auth: false, // default for absolute url when auth is omitted
+  expect: { status: 200 },
+  saveAs: "photoUploadResponse" // empty response → { status: 200 }
+}
+```
+
+- Absolute mode does **not** require a Cascade service registration.
+- When `auth` is omitted on a `url` command, no `Authorization` header is sent (safer for signed URLs).
+- Use `auth: "userKey"` only if the absolute URL still needs Bearer auth.
+- If `body` is set, it is sent as-is (no `JSON.stringify`, no default `Content-Type`).
+- If `dtoIn` is set without `body`, JSON is sent as usual (`Content-Type: application/json`).
+
 
 ## Assertions
 
@@ -360,9 +384,10 @@ You can use both `allowedErrorCodes` and `expectError` together:
 
 ## Authentication Priority
 
-1. Command-level `auth` field (highest priority)
-2. Service-level `defaultAuth` in env config
-3. Global `defaultAuth` in authentication config (lowest priority)
+1. Command-level `auth` field (highest priority); `auth: false` disables auth
+2. Absolute `url` commands with auth omitted → no auth
+3. Service-level `defaultAuth` in env config
+4. Global `defaultAuth` in authentication config (lowest priority)
 
 ## Dynamic User Registration
 

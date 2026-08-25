@@ -21,11 +21,13 @@ jest.unstable_mockModule("../../../src/cascade/auth-manager.js", () => ({
   getToken: mockGetToken,
 }));
 
-// Mock helpers
+// Mock helpers (resolveAuth mirrors real semantics for auth:false and absolute url)
 jest.unstable_mockModule("../../../src/cascade/helpers.js", () => ({
   getBaseUri: (env, service) => env.services[service].baseUri,
   resolveAuth: (command, env) => {
+    if (command.auth === false) return null;
     if (command.auth) return command.auth;
+    if (command.url != null) return null;
     if (command.service && env.services[command.service]?.defaultAuth) {
       return env.services[command.service].defaultAuth;
     }
@@ -447,6 +449,190 @@ describe("HTTP Client", () => {
       const state = {};
 
       await expect(makeRequest(command, env, state, {})).rejects.toEqual(mockError);
+    });
+
+    test("should PUT Buffer body to absolute URL without Authorization when auth is false", async () => {
+      const mockResponse = { status: 200, data: "" };
+      mockAxios.mockResolvedValue(mockResponse);
+      const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+
+      const command = {
+        url: "https://storage.example.com/upload?signed=1",
+        method: "PUT",
+        body: jpeg,
+        headers: { "Content-Type": "image/jpeg" },
+        auth: false,
+      };
+
+      const env = {
+        services: {
+          main: { baseUri: "http://localhost:3000", defaultAuth: "authorityUser" },
+        },
+        authentication: { defaultAuth: "authorityUser" },
+        config: { timeout: 5000 },
+      };
+
+      await makeRequest(command, env, {}, {});
+
+      expect(mockGetToken).not.toHaveBeenCalled();
+      expect(mockAxios).toHaveBeenCalledWith({
+        method: "PUT",
+        url: "https://storage.example.com/upload?signed=1",
+        headers: { "Content-Type": "image/jpeg" },
+        timeout: 5000,
+        data: jpeg,
+        params: undefined,
+      });
+    });
+
+    test("should resolve absolute url function from state.saved", async () => {
+      const mockResponse = { status: 200, data: {} };
+      mockAxios.mockResolvedValue(mockResponse);
+      const body = Buffer.from("bytes");
+
+      const command = {
+        url: (state) => state.saved.photoCreate.uploadUrl,
+        method: "PUT",
+        body,
+        headers: { "Content-Type": "image/jpeg" },
+        auth: false,
+      };
+
+      const state = {
+        saved: { photoCreate: { uploadUrl: "https://fake-gcs.local/upload?uploadType=media" } },
+      };
+
+      await makeRequest(command, { services: {}, config: { timeout: 5000 } }, state, {});
+
+      expect(mockAxios).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: "https://fake-gcs.local/upload?uploadType=media",
+          data: body,
+        }),
+      );
+    });
+
+    test("should skip token fetch when auth is false", async () => {
+      mockAxios.mockResolvedValue({ status: 200, data: {} });
+
+      await makeRequest(
+        {
+          url: "http://localhost:9999/raw",
+          method: "POST",
+          body: "plain",
+          auth: false,
+        },
+        {
+          services: { main: { baseUri: "http://localhost:3000", defaultAuth: "u" } },
+          authentication: { defaultAuth: "u" },
+          config: { timeout: 1000 },
+        },
+        {},
+        {},
+      );
+
+      expect(mockGetToken).not.toHaveBeenCalled();
+      expect(mockAxios.mock.calls[0][0].headers.Authorization).toBeUndefined();
+    });
+
+    test("should default absolute URL mode to no auth when auth is omitted", async () => {
+      mockAxios.mockResolvedValue({ status: 200, data: {} });
+
+      await makeRequest(
+        {
+          url: "http://localhost:9999/signed",
+          method: "PUT",
+          body: Buffer.from("x"),
+        },
+        {
+          services: { main: { baseUri: "http://localhost:3000", defaultAuth: "u" } },
+          authentication: { defaultAuth: "u" },
+          config: { timeout: 1000 },
+        },
+        {},
+        {},
+      );
+
+      expect(mockGetToken).not.toHaveBeenCalled();
+    });
+
+    test("should still send Bearer in service mode when defaultAuth is set", async () => {
+      mockAxios.mockResolvedValue({ status: 200, data: {} });
+      mockGetToken.mockResolvedValue("svc-token");
+
+      await makeRequest(
+        { endpoint: "/user/create", service: "main" },
+        {
+          services: { main: { baseUri: "http://localhost:3000", defaultAuth: "serviceUser" } },
+          authentication: { defaultAuth: "globalUser", users: { serviceUser: {} } },
+          config: { timeout: 5000 },
+        },
+        {},
+        {},
+      );
+
+      expect(mockGetToken).toHaveBeenCalledWith("serviceUser", expect.any(Object), expect.any(Object));
+      expect(mockAxios).toHaveBeenCalledWith(
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: "Bearer svc-token",
+            "Content-Type": "application/json",
+          }),
+        }),
+      );
+    });
+
+    test("should throw when absolute url does not resolve to http(s)", async () => {
+      await expect(
+        makeRequest(
+          { url: "/relative/path", method: "PUT", body: Buffer.from("x"), auth: false },
+          { services: {}, config: {} },
+          {},
+          {},
+        ),
+      ).rejects.toThrow(/absolute http\(s\) URL/);
+    });
+
+    test("should send JSON dtoIn on absolute URL when body is omitted", async () => {
+      mockAxios.mockResolvedValue({ status: 200, data: { ok: true } });
+
+      await makeRequest(
+        {
+          url: "http://localhost:9999/bucket",
+          method: "POST",
+          dtoIn: { name: "photos" },
+          auth: false,
+        },
+        { services: {}, config: { timeout: 1000 } },
+        {},
+        { name: "photos" },
+      );
+
+      expect(mockAxios).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: "http://localhost:9999/bucket",
+          data: { name: "photos" },
+          headers: expect.objectContaining({ "Content-Type": "application/json" }),
+        }),
+      );
+    });
+
+    test("should send empty body on absolute URL when neither body nor dtoIn is set", async () => {
+      mockAxios.mockResolvedValue({ status: 200, data: "" });
+
+      await makeRequest(
+        { url: "http://localhost:9999/ping", method: "PUT", auth: false },
+        { services: {}, config: { timeout: 1000 } },
+        {},
+        {},
+      );
+
+      expect(mockAxios).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: undefined,
+          params: undefined,
+        }),
+      );
     });
   });
 });

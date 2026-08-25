@@ -43,15 +43,20 @@ function isAllowedError(command, error) {
 }
 
 /**
- * Make an HTTP request for a command
- * @param {import('./types.js').Command} command - Command object
- * @param {import('./types.js').EnvironmentConfig} env - Environment configuration
- * @param {import('./types.js').State} state - Execution state
- * @param {Object} dtoIn - Resolved dtoIn object
- * @returns {Promise<import('axios').AxiosResponse>} Axios response
+ * Resolve request URL from absolute url or service+endpoint
+ * @param {import('./types.js').Command} command
+ * @param {import('./types.js').EnvironmentConfig} env
+ * @param {import('./types.js').State} state
+ * @returns {Promise<string>|string}
  */
-export async function makeRequest(command, env, state, dtoIn) {
-  const logger = getLogger();
+function resolveRequestUrl(command, env, state) {
+  if (command.url != null) {
+    const resolved = typeof command.url === "function" ? command.url(state) : command.url;
+    if (typeof resolved !== "string" || !/^https?:\/\//i.test(resolved)) {
+      throw new Error(`Command url must resolve to an absolute http(s) URL, got: ${resolved}`);
+    }
+    return resolved;
+  }
 
   const service = env.services[command.service];
   if (!service) {
@@ -59,16 +64,98 @@ export async function makeRequest(command, env, state, dtoIn) {
   }
 
   const baseUri = getBaseUri(env, command.service);
+  return `${baseUri}${command.endpoint}`;
+}
+
+/**
+ * Describe body for logging without dumping binary content
+ * @param {any} body
+ * @returns {string}
+ */
+function describeBodyForLog(body) {
+  if (body == null) {
+    return "empty";
+  }
+  if (Buffer.isBuffer(body)) {
+    return `<binary ${body.length} bytes>`;
+  }
+  if (body instanceof Uint8Array) {
+    return `<binary ${body.byteLength} bytes>`;
+  }
+  if (body instanceof ArrayBuffer) {
+    return `<binary ${body.byteLength} bytes>`;
+  }
+  if (typeof body === "string") {
+    return body.length > 200 ? `<string ${body.length} chars>` : body;
+  }
+  try {
+    return JSON.stringify(body, null, 2);
+  } catch {
+    return String(body);
+  }
+}
+
+/**
+ * Resolve request body, query params, and headers
+ * @param {import('./types.js').Command} command
+ * @param {import('./types.js').State} state
+ * @param {string} method
+ * @param {Object} [resolvedDtoIn] - Pre-resolved dtoIn from executor
+ * @returns {{ data: any, params: any, headers: Object }}
+ */
+function resolveBodyAndHeaders(command, state, method, resolvedDtoIn) {
+  const rawHeaders = typeof command.headers === "function" ? command.headers(state) : command.headers || {};
+  const headers = { ...rawHeaders };
+
+  if (command.body != null) {
+    const body = typeof command.body === "function" ? command.body(state) : command.body;
+    // Do not default Content-Type for raw body
+    return { data: body, params: undefined, headers };
+  }
+
+  // JSON path: service mode always, or absolute URL with dtoIn
+  if (command.dtoIn != null || command.url == null) {
+    if (!headers["Content-Type"] && !headers["content-type"]) {
+      headers["Content-Type"] = "application/json";
+    }
+    const dtoIn = resolvedDtoIn !== undefined ? resolvedDtoIn : {};
+    return {
+      data: method !== "GET" && method !== "DELETE" ? dtoIn : undefined,
+      params: method === "GET" || method === "DELETE" ? dtoIn : undefined,
+      headers,
+    };
+  }
+
+  // Absolute URL with neither body nor dtoIn
+  return { data: undefined, params: undefined, headers };
+}
+
+/**
+ * Make an HTTP request for a command
+ * @param {import('./types.js').Command} command - Command object
+ * @param {import('./types.js').EnvironmentConfig} env - Environment configuration
+ * @param {import('./types.js').State} state - Execution state
+ * @param {Object} dtoIn - Resolved dtoIn object (used when command uses JSON dtoIn / service mode)
+ * @returns {Promise<import('axios').AxiosResponse>} Axios response
+ */
+export async function makeRequest(command, env, state, dtoIn) {
+  const logger = getLogger();
+
   const method = (command.method || "POST").toUpperCase();
-  const url = `${baseUri}${command.endpoint}`;
+  const url = resolveRequestUrl(command, env, state);
+  const { data, params, headers: bodyHeaders } = resolveBodyAndHeaders(command, state, method, dtoIn);
 
-  logger.info(`Executing ${method} ${command.endpoint} on service ${command.service}`);
+  if (command.url != null) {
+    logger.info(`Executing ${method} ${url}`);
+  } else {
+    logger.info(`Executing ${method} ${command.endpoint} on service ${command.service}`);
+  }
   logger.debug(`Request URL: ${url}`);
-  logger.debug(`Request body: ${JSON.stringify(dtoIn, null, 2)}`);
+  logger.debug(`Request body: ${describeBodyForLog(data)}`);
 
-  // Resolve auth
+  // Resolve auth (auth: false and absolute-url default → no Bearer)
   const userKey = resolveAuth(command, env);
-  let headers = {};
+  const headers = { ...bodyHeaders };
 
   if (userKey) {
     const token = await getToken(userKey, env, state);
@@ -76,17 +163,13 @@ export async function makeRequest(command, env, state, dtoIn) {
     logger.debug(`Using authentication for user: ${userKey}`);
   }
 
-  // Prepare request config
   const config = {
     method,
     url,
-    headers: {
-      "Content-Type": "application/json",
-      ...headers,
-    },
+    headers,
     timeout: env.config?.timeout || 30000,
-    data: method !== "GET" && method !== "DELETE" ? dtoIn : undefined,
-    params: method === "GET" || method === "DELETE" ? dtoIn : undefined,
+    data,
+    params,
   };
 
   try {

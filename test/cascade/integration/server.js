@@ -171,6 +171,35 @@ export function startServer() {
         return;
       }
 
+      if (pathname === "/upload/binary" && (method === "PUT" || method === "POST")) {
+        const chunks = [];
+        req.on("data", (chunk) => chunks.push(chunk));
+        req.on("end", () => {
+          const buffer = Buffer.concat(chunks);
+          const contentType = req.headers["content-type"] || "";
+          const authHeader = req.headers.authorization;
+          if (authHeader) {
+            res.writeHead(400);
+            res.end(JSON.stringify({ code: "unexpectedAuth", message: "Binary upload must not send Authorization" }));
+            return;
+          }
+          if (!contentType.includes("image/jpeg")) {
+            res.writeHead(400);
+            res.end(JSON.stringify({ code: "badContentType", message: `Expected image/jpeg, got ${contentType}` }));
+            return;
+          }
+          if (buffer.length === 0) {
+            res.writeHead(400);
+            res.end(JSON.stringify({ code: "emptyBody", message: "Expected binary body" }));
+            return;
+          }
+          // Empty body response (like GCS often returns)
+          res.writeHead(200);
+          res.end("");
+        });
+        return;
+      }
+
       // Default 404
       res.writeHead(404);
       res.end(JSON.stringify({ code: "notFound", message: "Endpoint not found" }));

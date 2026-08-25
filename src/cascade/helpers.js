@@ -90,14 +90,27 @@ export function getUser(state, userKey) {
 
 /**
  * Resolve auth user key based on priority: command > service > global
+ * - auth: false → no auth (null)
+ * - auth omitted + absolute url → no auth (null)
+ * - auth omitted + service mode → defaultAuth chain
  * @param {import('./types.js').Command} command - Command object
  * @param {import('./types.js').EnvironmentConfig} env - Environment configuration
- * @returns {string|undefined} User key or undefined
+ * @returns {string|null|undefined} User key, null to disable auth, or undefined if none configured
  */
 export function resolveAuth(command, env) {
+  // Explicit disable
+  if (command.auth === false) {
+    return null;
+  }
+
   // Priority 1: Command-level auth
   if (command.auth) {
     return command.auth;
+  }
+
+  // Absolute URL mode defaults to no auth (safer for signed URLs)
+  if (command.url != null) {
+    return null;
   }
 
   // Priority 2: Service-level defaultAuth

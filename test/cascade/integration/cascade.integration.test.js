@@ -265,4 +265,22 @@ describe("Cascade Integration Tests", () => {
     expect(state.saved.registeredUser).toBeDefined();
     expect(state.users.explicitUser).toBeDefined();
   });
+
+  test("should PUT binary body to absolute URL without auth", async () => {
+    const envPath = path.join(__dirname, "fixtures", "envs", "test.env.js");
+    const datasetPath = path.join(__dirname, "fixtures", "datasets", "absolute-url-upload.js");
+
+    const env = await loadEnvironment(envPath);
+    env.services.main.baseUri = serverInfo.url;
+
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0xff, 0xd9]);
+    const state = await execute(datasetPath, env, {
+      options: {
+        uploadUrl: `${serverInfo.url}/upload/binary`,
+        fixtureJpeg: jpeg,
+      },
+    });
+
+    expect(state.saved.photoUploadResponse).toEqual({ status: 200 });
+  });
 });
